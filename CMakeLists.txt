@@ -34,7 +34,7 @@ message(STATUS " - Machine  \t: ${CMAKE_CXX_ANDROID_TOOLCHAIN_MACHINE}")
 if(LEONARDO_CRYPTO)
     include(build-openssl)
 endif()
-#include(build-x264)
+include(build-x264)
 
 
 #include(build-yuv)
@@ -43,7 +43,7 @@ endif()
 #include(build-rtc)
 
 # libseurat.so
-# include(build-seurat)
+#include(build-seurat)
 
 #include(build-faac)
-#include(build-open-h264)
+include(build-open-h264)

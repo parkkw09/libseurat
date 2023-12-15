@@ -6,24 +6,24 @@ DIST=dist
 TARGET=""
 BUILD_TYPE="Release"
 BUILD_OPTION=""
-ARCHS="x86 x86_64 armeabi-v7a arm64-v8a"
+ARCHS="x86_64 arm64-v8a"
 
 if [ "$1" = "ANDROID" ] ; then
     echo "ANDROID build mode"
     TARGET="ANDROID"
-    ARCHS="x86 x86_64 armeabi-v7a arm64-v8a"
+    ARCHS="x86_64 arm64-v8a"
 elif [ "$1" = "IOS" ] ; then
     echo "IOS build mode"
     TARGET="IOS"
-    ARCHS="x86 x86_64 armv7 arm64"
+    ARCHS="x86_64 arm64"
 elif [ "$1" = "MSVC" ] ; then
     echo "MSVC build mode"
     TARGET="MSVC"
-    ARCHS="x86 x86_64"
+    ARCHS="x86_64"
 elif [ "$1" = "OSX" ] ; then
     echo "OSX build mode"
     TARGET="OSX"
-    ARCHS="x86 x86_64"
+    ARCHS="x86_64"
 else
     echo "unknown build mode"
     exit 0
