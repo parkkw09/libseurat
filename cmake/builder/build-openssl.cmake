@@ -1,0 +1,73 @@
+# includes
+include(ExternalProject)
+
+set(OPENSSL_BUILDER "${CMAKE_CURRENT_SOURCE_DIR}/cmake/builder/openssl")
+set(CMAKE_MODULE_PATH "${OPENSSL_BUILDER}" "${CMAKE_MODULE_PATH}")
+set(BUILDER_NAME "openssl")
+
+set(OPENSSL_BUILD_VERSION "")
+set(OPENSSL_ARCH "")
+set(OPENSSL_PRE_BUILD "")
+set(OPENSSL_OUT_DIR "")
+
+set(CONFIGURE_OPENSSL_MODULES no-shared)
+
+list(APPEND OPENSSL_CONFIGURE_OPTIONS "")
+list(APPEND OPENSSL_BUILD_OPTIONS all install_sw)
+
+if (ANDROID)
+    set(OPENSSL_ARCH "android")
+    set(OPENSSL_BUILD_VERSION "1.0.2q")
+    set(OPENSSL_PRE_BUILD ${OPENSSL_BUILDER}/pre_build_android.sh -t ${ANDROID_TOOLCHAIN_ROOT} -h ${CMAKE_CXX_ANDROID_TOOLCHAIN_MACHINE})
+#    set(OPENSSL_PRE_BUILD ${OPENSSL_BUILDER}/pre_build_android_new.sh -t ${CMAKE_CXX_ANDROID_TOOLCHAIN_PREFIX})
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL Darwin)
+        set(SED_COMMAND "gsed")
+    else()
+        set(SED_COMMAND "sed")
+    endif()
+
+    set(OPENSSL_OUT_DIR ${OUT_DIR})
+
+    list(APPEND OPENSSL_CONFIGURE_OPTIONS "-fPIC")
+    list(APPEND OPENSSL_CONFIGURE_OPTIONS && ${SED_COMMAND} -i "s/-mandroid//g" Makefile)
+    list(APPEND OPENSSL_BUILD_OPTIONS ANDROID_DEV=${ANDROID_SYSROOT_ROOT}/usr)
+elseif (IOS)
+    if(LEONARDO_ARCH STREQUAL "x86")
+        set(OPENSSL_ARCH "iossimulator-xcrun")
+    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+        set(OPENSSL_ARCH "iossimulator-xcrun")
+    elseif(LEONARDO_ARCH STREQUAL "armeabi-v7a")
+        set(OPENSSL_ARCH "ios-cross")
+    elseif(LEONARDO_ARCH STREQUAL "arm64-v8a")
+        set(OPENSSL_ARCH "ios64-cross")
+    else()
+        message(FATAL_ERROR "Unknown LEONARDO_ARCH = [${LEONARDO_ARCH}]")
+    endif()
+    set(OPENSSL_BUILD_VERSION "1.1.1d")
+
+    set(OPENSSL_OUT_DIR ${OUT_DIR})
+
+    list(APPEND OPENSSL_CONFIGURE_OPTIONS "--prefix=${OUT_DIR}")
+    # list(APPEND OPENSSL_BUILD_OPTIONS install_ssldirs)
+    set(PRE_BUILD ${OPENSSL_BUILDER}/pre_build_ios.sh -t ${TOOLCHAIN_PATH} -p ${TOOLCHAIN_CROSS_TOP} -s ${TOOLCHAIN_CROSS_IPHONE_SDK})
+endif()
+
+message(STATUS "OPENSSL_ARCH = ${OPENSSL_ARCH}")
+message(STATUS "OPENSSL_BUILD_VERSION = ${OPENSSL_BUILD_VERSION}")
+message(STATUS "OPENSSL_PRE_BUILD = ${OPENSSL_PRE_BUILD}")
+message(STATUS "OPENSSL_ARCH = ${OPENSSL_ARCH}")
+message(STATUS "CONFIGURE_OPENSSL_MODULES = ${CONFIGURE_OPENSSL_MODULES}")
+message(STATUS "OPENSSL_CONFIGURE_OPTIONS = ${OPENSSL_CONFIGURE_OPTIONS}")
+message(STATUS "OPENSSL_BUILD_OPTIONS = ${OPENSSL_BUILD_OPTIONS}")
+message(STATUS "OPENSSL_OUT_DIR = ${OPENSSL_OUT_DIR}")
+
+# add openssl target
+ExternalProject_Add(${BUILDER_NAME}
+    PREFIX ${BUILDER_NAME}
+    BUILD_IN_SOURCE 1
+    URL https://www.openssl.org/source/openssl-${OPENSSL_BUILD_VERSION}.tar.gz
+    UPDATE_COMMAND ""
+    CONFIGURE_COMMAND source ${OPENSSL_PRE_BUILD} && ./Configure ${OPENSSL_ARCH} --openssldir=${OPENSSL_OUT_DIR} ${CONFIGURE_OPENSSL_MODULES} ${OPENSSL_CONFIGURE_OPTIONS}
+    BUILD_COMMAND source ${OPENSSL_PRE_BUILD} && make ${OPENSSL_BUILD_OPTIONS}
+    INSTALL_COMMAND ""
+)

@@ -1,0 +1,43 @@
+# includes
+include(ExternalProject)
+
+set(OPEN_H264_ANDROID_NDK "$ENV{NDK_R13}")
+set(OPEN_H264_BUILDER "${CMAKE_CURRENT_SOURCE_DIR}/cmake/builder/prebuild")
+set(CMAKE_MODULE_PATH "${OPEN_H264_BUILDER}" "${CMAKE_MODULE_PATH}")
+
+set(OPEN_H264_ARCH "")
+set(PRE_BUILD "")
+list(APPEND OPEN_H264_CONFIGURE_OPTIONS "")
+list(APPEND OPEN_H264_BUILD_OPTIONS all install)
+
+if (ANDROID)
+    set(OPEN_H264_ARCH "android")
+    list(APPEND OPEN_H264_BUILD_OPTIONS "OS=${OPEN_H264_ARCH} NDK_ROOT=${OPEN_H264_ANDROID_NDK} TARGET=android-21 ARCH=${CMAKE_ANDROID_ARCH_ABI} NDK_TOOLCHAIN_VERSION=clang")
+    set(PRE_BUILD ${OPEN_H264_BUILDER}/pre_build_android.sh -t ${ANDROID_TOOLCHAIN_ROOT} -h ${ANDROID_TARGET_HOST} -a ${ANDROID_TARGET_HOST_API})
+elseif (IOS)
+    if(LEONARDO_ARCH STREQUAL "x86")
+        set(OPEN_H264_ARCH "iossimulator-xcrun")
+    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+        set(OPEN_H264_ARCH "iossimulator-xcrun")
+    elseif(LEONARDO_ARCH STREQUAL "armeabi-v7a")
+        set(OPEN_H264_ARCH "ios-cross")
+    elseif(LEONARDO_ARCH STREQUAL "arm64-v8a")
+        set(OPEN_H264_ARCH "ios64-cross")
+    else()
+        message(FATAL_ERROR "Unknown LEONARDO_ARCH = [${LEONARDO_ARCH}]")
+    endif()
+    set(OPEN_H264_BUILD_VERSION "1.1.1d")
+    list(APPEND OPEN_H264_CONFIGURE_OPTIONS "--prefix=${OUT_DIR}")
+    list(APPEND OPEN_H264_BUILD_OPTIONS "OS=${OPEN_H264_ARCH} NDK_ROOT=${OPEN_H264_ANDROID_NDK} TARGET=android-21 ARCH=${CMAKE_ANDROID_ARCH_ABI} NDK_TOOLCHAIN_VERSION=clang")
+    set(PRE_BUILD ${OPEN_H264_BUILDER}/pre_build_ios.sh -t ${TOOLCHAIN_PATH} -p ${TOOLCHAIN_CROSS_TOP} -s ${TOOLCHAIN_CROSS_IPHONE_SDK})
+endif()
+ 
+# add OPEN_H264 target
+ExternalProject_Add(OPEN_H264-EXTERNAL
+    GIT_REPOSITORY "https://github.com/cisco/openh264.git"
+    UPDATE_COMMAND ""
+    BUILD_COMMAND cd <SOURCE_DIR> && source ${PRE_BUILD}
+#    BUILD_COMMAND cd <SOURCE_DIR>
+#    BUILD_COMMAND && make ${OPEN_H264_BUILD_OPTIONS}
+#    INSTALL_COMMAND ""
+)
