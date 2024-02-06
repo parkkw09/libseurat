@@ -6,6 +6,9 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake" "${CMAKE_MODULE_PATH}")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/builder" "${CMAKE_MODULE_PATH}")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/toolchain" "${CMAKE_MODULE_PATH}")
 
+set(LEONARDO_TARGET "ANDROID")
+set(LEONARDO_ARCH "arm64-v8a")
+
 if(LEONARDO_TARGET STREQUAL "ANDROID")
     include(toolchain-android)
 elseif(LEONARDO_TARGET STREQUAL "IOS")
@@ -15,7 +18,7 @@ elseif(LEONARDO_TARGET STREQUAL "MSVC")
 elseif(LEONARDO_TARGET STREQUAL "OSX")
     include(toolchain-osx)
 else()
-    message(FATAL_ERROR "Unknown LEONARDO_ARCH = [${LEONARDO_ARCH}]")
+    message(FATAL_ERROR "Unknown LEONARDO_TARGET = [${LEONARDO_TARGET}]")
 endif()
 
 project(LEONARDO VERSION 0.1.0)
