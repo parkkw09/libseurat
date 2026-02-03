@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 4.0)
 
 option(LEONARDO_CRYPTO "LEONARDO Support Crypto Algorithm." ON)
 
