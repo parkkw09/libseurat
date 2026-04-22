@@ -1,4 +1,27 @@
 #!/bin/bash
+# =============================================================================
+# libseurat (leonardo) build driver — 64-bit only
+#
+# Usage:
+#   ./build.sh ANDROID [Release|Debug|Dev]        # arm64-v8a + x86_64
+#   ./build.sh IOS     [Release|Debug|Dev]        # arm64 device + arm64-sim + x86_64 sim
+#   ./build.sh OSX     [Release|Debug|Dev]        # arm64 + x86_64 (Universal)
+#   ./build.sh MSVC    [Release|Debug|Dev]        # x86_64
+#
+#   After building, distributable packages are produced under dist/:
+#     Android -> dist/android/seurat.aar  (static archives + headers in jniLibs/jni)
+#     iOS     -> dist/ios/Seurat.xcframework (arm64 device + simulator slices)
+#     OSX     -> dist/osx/                  (universal binaries)
+#
+# Environment:
+#   ANDROID_NDK_HOME  (or ANDROID_NDK_ROOT / ANDROID_NDK / NDK_R26)
+#                     must point to NDK r21 or later (r26+ recommended).
+# =============================================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "${SCRIPT_DIR}"
 
 TMP=WORK
 OUT=out
@@ -6,90 +29,96 @@ DIST=dist
 TARGET=""
 BUILD_TYPE="Release"
 BUILD_OPTION=""
-ARCHS="x86_64 arm64-v8a"
+ARCHS=""
 
-if [ "$1" = "ANDROID" ] ; then
-    echo "ANDROID build mode"
+if [ "$1" = "ANDROID" ]; then
+    echo ">>> ANDROID build (64-bit only)"
     TARGET="ANDROID"
-    ARCHS="x86_64 arm64-v8a"
-elif [ "$1" = "IOS" ] ; then
-    echo "IOS build mode"
+    ARCHS="arm64-v8a x86_64"
+elif [ "$1" = "IOS" ]; then
+    echo ">>> IOS build (64-bit only)"
     TARGET="IOS"
-    ARCHS="x86_64 arm64"
-elif [ "$1" = "MSVC" ] ; then
-    echo "MSVC build mode"
+    # arm64        = iphoneos device
+    # arm64-sim    = Apple Silicon iphonesimulator
+    # x86_64       = legacy Intel iphonesimulator (optional; drop if you don't need it)
+    ARCHS="arm64 arm64-sim x86_64"
+elif [ "$1" = "OSX" ]; then
+    echo ">>> OSX build (64-bit only)"
+    TARGET="OSX"
+    ARCHS="arm64 x86_64"
+elif [ "$1" = "MSVC" ]; then
+    echo ">>> MSVC build (64-bit only)"
     TARGET="MSVC"
     ARCHS="x86_64"
-elif [ "$1" = "OSX" ] ; then
-    echo "OSX build mode"
-    TARGET="OSX"
-    ARCHS="x86_64"
 else
-    echo "unknown build mode"
-    exit 0
+    echo "Usage: $0 {ANDROID|IOS|OSX|MSVC} [Release|Debug|Dev]"
+    exit 1
 fi
 
-if [ "$2" = "DEBUG" ] ; then
-    echo "build type DEBUG"
-    BUILD_TYPE="Debug"
-    BUILD_OPTION="VERBOSE=1"
-elif [ "$2" = "DEV" ] ; then
-    echo "build type DEV"
-    BUILD_TYPE="Release"
-    BUILD_OPTION="VERBOSE=1"
-    ARCHS="x86_64"
-else
-    echo "build type RELEASE"
-    BUILD_TYPE="Release"
-    BUILD_OPTION=""
-fi
+case "$2" in
+    DEBUG|Debug|debug)
+        echo "    build type DEBUG"
+        BUILD_TYPE="Debug"
+        BUILD_OPTION="VERBOSE=1"
+        ;;
+    DEV|Dev|dev)
+        echo "    build type DEV (single-arch)"
+        BUILD_TYPE="Release"
+        BUILD_OPTION="VERBOSE=1"
+        # Pick a sensible single-arch default per target for fast iteration.
+        case "${TARGET}" in
+            ANDROID) ARCHS="arm64-v8a" ;;
+            IOS)     ARCHS="arm64-sim" ;;
+            OSX)     ARCHS="arm64" ;;
+            MSVC)    ARCHS="x86_64" ;;
+        esac
+        ;;
+    *)
+        echo "    build type RELEASE"
+        BUILD_TYPE="Release"
+        BUILD_OPTION=""
+        ;;
+esac
 
-if [ ! -d ${TMP} ]; then
- mkdir ${TMP}
-fi
+mkdir -p "${TMP}" "${DIST}"
 
-if [ ! -d ${DIST} ]; then
- mkdir ${DIST}
-fi
-
-if [ "$1" = "ANDROID" ] ; then
-
-    if [ ! -d ${DIST}/jni ]; then
-        mkdir ${DIST}/jni
-    fi
-
-    if [ ! -d ${DIST}/jniLibs ]; then
-        mkdir ${DIST}/jniLibs
-    fi
-fi
-
+# -----------------------------------------------------------------------------
+# Per-arch build loop.
+# -----------------------------------------------------------------------------
 for ARCH in ${ARCHS}; do
-#for ARCH in x86_64; do
+    echo "====================================================================="
+    echo "  Building ${TARGET} / ${ARCH} (${BUILD_TYPE})"
+    echo "====================================================================="
 
-    echo ${TMP}/${ARCH}
+    BUILD_DIR="${TMP}/${TARGET}-${ARCH}"
+    mkdir -p "${BUILD_DIR}"
 
-    if [ ! -d ${TMP}/${ARCH} ]; then
-        mkdir ${TMP}/${ARCH}
-    fi
+    cmake -S . -B "${BUILD_DIR}" \
+        -D LEONARDO_ARCH=${ARCH} \
+        -D LEONARDO_TARGET=${TARGET} \
+        -D LEONARDO_CRYPTO=ON \
+        -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
 
-    cmake . -B ${TMP}/${ARCH} -D LEONARDO_ARCH=${ARCH} -D LEONARDO_TARGET=$TARGET -D LEONARDO_CRYPTO=ON -D LEONARDO_SHARED_ALL=OFF -D CMAKE_BUILD_TYPE=$BUILD_TYPE
-    cd ${TMP}/${ARCH}
-
-    make $BUILD_OPTION
-    make install
-    cd ../..
-
-    if [ "$1" = "ANDROID" ] ; then
-
-        if [ ! -d ${DIST}/jniLibs/${ARCH} ]; then
-            mkdir ${DIST}/jniLibs/${ARCH}
-        fi
-
-        TEMP_OUT_DIR=${OUT}/${ARCH}
-        TEMP_DIST_DIR=${DIST}/jniLibs/${ARCH}
-
-#        cp -r ${TEMP_OUT_DIR}/include ${DIST}/jni
-#        cp ${TEMP_OUT_DIR}/lib/libseurat.* ${TEMP_DIST_DIR}/
-#        cp ${TEMP_OUT_DIR}/lib/libjingle_peerconnection*.* ${TEMP_DIST_DIR}/
-    fi
+    cmake --build "${BUILD_DIR}" -- ${BUILD_OPTION}
 done
+
+# -----------------------------------------------------------------------------
+# Packaging.
+# -----------------------------------------------------------------------------
+case "${TARGET}" in
+    ANDROID)
+        bash "${SCRIPT_DIR}/scripts/package-android.sh" "${OUT}" "${DIST}/android" "${ARCHS}"
+        ;;
+    IOS)
+        bash "${SCRIPT_DIR}/scripts/package-ios.sh" "${OUT}" "${DIST}/ios" "${ARCHS}"
+        ;;
+    OSX)
+        bash "${SCRIPT_DIR}/scripts/package-osx.sh" "${OUT}" "${DIST}/osx" "${ARCHS}"
+        ;;
+    MSVC)
+        echo "    (MSVC packaging step not yet implemented)"
+        ;;
+esac
+
+echo ""
+echo ">>> Build complete. Artifacts under: ${DIST}/"

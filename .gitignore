@@ -1,14 +1,49 @@
-# These are some examples of commonly ignored file patterns.
-# You should customize this list as applicable to your project.
-# Learn more about .gitignore:
-#     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
+# OS
+.DS_Store
+Thumbs.db
 
+# IDE / Editor
 .idea/
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+
+# Build output dirs
 out/
 dist/
 WORK/
-cmake-build-debug/
-.DS_Store
-Thumbs.db
-.o
-.d
+build/
+build-*/
+cmake-build-*/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+compile_commands.json
+_deps/
+Makefile
+
+# Compiled objects
+*.o
+*.obj
+*.d
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.exp
+*.pdb
+
+# Misc
+*.log
+*.tmp
+core
+core.*
