@@ -1,7 +1,7 @@
 # =============================================================================
 # seurat-rtmp — RTMP(S) publisher client (internal, MIT).
 #
-# Links against seurat-flv (for payload framing) and — when LEONARDO_CRYPTO is
+# Links against seurat-flv (for payload framing) and — when SEURAT_CRYPTO is
 # ON — against the OpenSSL static libs already built into OUT_DIR/lib by the
 # build-openssl.cmake ExternalProject (for RTMPS / TLS).
 #
@@ -12,7 +12,7 @@
 #   Phase B   -> handshake, AMF0, chunk stream, publish negotiation.
 #   Phase C   -> AV payload path (metadata, AVC/AAC sequence + frames).
 #   Phase D   -> RTMPS (OpenSSL BIO-wrapped TlsTransport). Active when
-#                 LEONARDO_CRYPTO=ON; the TLS source is unconditionally
+#                 SEURAT_CRYPTO=ON; the TLS source is unconditionally
 #                 compiled but its body is guarded by SEURAT_RTMP_WITH_TLS,
 #                 so plain-RTMP builds produce an empty translation unit.
 # =============================================================================
@@ -49,7 +49,7 @@ target_compile_options(seurat-rtmp PRIVATE
 # and may later call its API via static inline in rtmp.cpp).
 add_dependencies(seurat-rtmp seurat-flv)
 
-if(LEONARDO_CRYPTO)
+if(SEURAT_CRYPTO)
     # OpenSSL static archives live under OUT_DIR/lib/ (installed by the
     # build-openssl.cmake ExternalProject). For the seurat-rtmp static
     # archive itself we only need the OpenSSL headers at compile time;

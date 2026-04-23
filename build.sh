@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# libseurat (leonardo) build driver — 64-bit only
+# libseurat (seurat) build driver — 64-bit only
 #
 # Usage:
 #   ./build.sh ANDROID [Release|Debug|Dev]        # arm64-v8a + x86_64
@@ -94,9 +94,9 @@ for ARCH in ${ARCHS}; do
     mkdir -p "${BUILD_DIR}"
 
     cmake -S . -B "${BUILD_DIR}" \
-        -D LEONARDO_ARCH=${ARCH} \
-        -D LEONARDO_TARGET=${TARGET} \
-        -D LEONARDO_CRYPTO=ON \
+        -D SEURAT_ARCH=${ARCH} \
+        -D SEURAT_TARGET=${TARGET} \
+        -D SEURAT_CRYPTO=ON \
         -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
 
     cmake --build "${BUILD_DIR}" -- ${BUILD_OPTION}
@@ -107,13 +107,13 @@ done
 # -----------------------------------------------------------------------------
 case "${TARGET}" in
     ANDROID)
-        bash "${SCRIPT_DIR}/scripts/package-android.sh" "${OUT}" "${DIST}/android" "${ARCHS}"
+        bash "${SCRIPT_DIR}/scripts/package-android.sh" "${OUT}/android" "${DIST}/android" "${ARCHS}"
         ;;
     IOS)
-        bash "${SCRIPT_DIR}/scripts/package-ios.sh" "${OUT}" "${DIST}/ios" "${ARCHS}"
+        bash "${SCRIPT_DIR}/scripts/package-ios.sh" "${OUT}/ios" "${DIST}/ios" "${ARCHS}"
         ;;
     OSX)
-        bash "${SCRIPT_DIR}/scripts/package-osx.sh" "${OUT}" "${DIST}/osx" "${ARCHS}"
+        bash "${SCRIPT_DIR}/scripts/package-osx.sh" "${OUT}/osx" "${DIST}/osx" "${ARCHS}"
         ;;
     MSVC)
         echo "    (MSVC packaging step not yet implemented)"

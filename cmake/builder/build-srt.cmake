@@ -21,11 +21,11 @@ set(_srt_args
     "-DENABLE_APPS=OFF"
     "-DENABLE_SHARED=OFF"
     "-DENABLE_STATIC=ON"
-    "-DENABLE_ENCRYPTION=${LEONARDO_CRYPTO}"
+    "-DENABLE_ENCRYPTION=${SEURAT_CRYPTO}"
     "-DENABLE_HEAVY_LOGGING=OFF"
     "-DUSE_OPENSSL_PC=OFF")
 
-if(LEONARDO_CRYPTO)
+if(SEURAT_CRYPTO)
     list(APPEND _srt_args
         "-DUSE_ENCLIB=openssl"
         "-DOPENSSL_USE_STATIC_LIBS=TRUE"
@@ -36,34 +36,34 @@ if(LEONARDO_CRYPTO)
 endif()
 
 set(_srt_depends "")
-if(LEONARDO_CRYPTO)
+if(SEURAT_CRYPTO)
     list(APPEND _srt_depends openssl)
 endif()
 
 if(ANDROID)
     list(APPEND _srt_args
         "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_ANDROID_NDK}/build/cmake/android.toolchain.cmake"
-        "-DANDROID_ABI=${LEONARDO_ARCH}"
-        "-DANDROID_PLATFORM=android-${LEONARDO_ANDROID_MIN_API}"
+        "-DANDROID_ABI=${SEURAT_ARCH}"
+        "-DANDROID_PLATFORM=android-${SEURAT_ANDROID_MIN_API}"
         "-DANDROID_STL=c++_static")
 
 elseif(IOS)
     list(APPEND _srt_args
         "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchain/toolchain-ios.cmake"
-        "-DLEONARDO_TARGET:STRING=IOS"
-        "-DLEONARDO_ARCH:STRING=${LEONARDO_ARCH}"
-        "-DLEONARDO_IOS_DEPLOYMENT_TARGET:STRING=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
+        "-DSEURAT_TARGET:STRING=IOS"
+        "-DSEURAT_ARCH:STRING=${SEURAT_ARCH}"
+        "-DSEURAT_IOS_DEPLOYMENT_TARGET:STRING=${SEURAT_IOS_DEPLOYMENT_TARGET}")
 
 elseif(APPLE)
     list(APPEND _srt_args
-        "-DCMAKE_OSX_ARCHITECTURES=${LEONARDO_ARCH}"
-        "-DCMAKE_OSX_DEPLOYMENT_TARGET=${LEONARDO_OSX_DEPLOYMENT_TARGET}")
+        "-DCMAKE_OSX_ARCHITECTURES=${SEURAT_ARCH}"
+        "-DCMAKE_OSX_DEPLOYMENT_TARGET=${SEURAT_OSX_DEPLOYMENT_TARGET}")
 
 elseif(MSVC)
     # nothing extra
 
 else()
-    message(FATAL_ERROR "SRT: target [${LEONARDO_TARGET}] not supported")
+    message(FATAL_ERROR "SRT: target [${SEURAT_TARGET}] not supported")
 endif()
 
 message(STATUS "SRT_VERSION = ${SRT_VERSION}")

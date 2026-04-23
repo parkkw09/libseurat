@@ -11,7 +11,7 @@
  * RTMP vs RTMPS:
  *   - RTMP  (TCP on port 1935).
  *   - RTMPS (TLS-over-TCP, port 443 in practice). Requires building against
- *     OpenSSL (LEONARDO_CRYPTO=ON at project configure time).
+ *     OpenSSL (SEURAT_CRYPTO=ON at project configure time).
  *
  * Threading:
  *   - Synchronous / single-threaded. All `_run*` style methods block the

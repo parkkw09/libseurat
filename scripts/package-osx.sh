@@ -36,7 +36,7 @@ if [ -d "${OUT_ROOT}/${PRIMARY}/include" ]; then
     cp -r "${OUT_ROOT}/${PRIMARY}/include/." "${DIST_DIR}/include/"
 fi
 
-LIBS=$(find "${OUT_ROOT}/${PRIMARY}/lib" -maxdepth 1 -type f -name "*.a" -exec basename {} \; | sort -u)
+LIBS=$(find "${OUT_ROOT}/${PRIMARY}/lib" -maxdepth 1 -type f \( -name "*.a" -o -name "*.dylib" \) -exec basename {} \; | sort -u)
 
 for LIB in ${LIBS}; do
     INPUTS=""

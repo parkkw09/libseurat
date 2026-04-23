@@ -5,11 +5,11 @@
 # the request and emits consistent TOOLCHAIN/COMMON options.
 # =============================================================================
 
-message(STATUS "LEONARDO_ARCH = ${LEONARDO_ARCH}")
+message(STATUS "SEURAT_ARCH = ${SEURAT_ARCH}")
 
-if(NOT LEONARDO_ARCH STREQUAL "x86_64")
+if(NOT SEURAT_ARCH STREQUAL "x86_64")
     message(FATAL_ERROR
-        "Unsupported LEONARDO_ARCH = [${LEONARDO_ARCH}]. "
+        "Unsupported SEURAT_ARCH = [${SEURAT_ARCH}]. "
         "MSVC 64-bit build supports: x86_64.")
 endif()
 
@@ -22,7 +22,7 @@ message(STATUS "CMAKE_SYSTEM_PROCESSOR = [${CMAKE_SYSTEM_PROCESSOR}]")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
 
-set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/out/${LEONARDO_ARCH})
+set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/out/msvc/${SEURAT_ARCH})
 
 list(APPEND COMMON_OPTIONS "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 list(APPEND COMMON_OPTIONS "-DCMAKE_PREFIX_PATH=${OUT_DIR}")

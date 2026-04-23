@@ -6,52 +6,52 @@ if(NOT APPLE)
     message(FATAL_ERROR "iOS build is only available on macOS (Apple) hosts.")
 endif()
 
-message(STATUS "LEONARDO_ARCH = ${LEONARDO_ARCH}")
+message(STATUS "SEURAT_ARCH = ${SEURAT_ARCH}")
 
-set(LEONARDO_IOS_DEPLOYMENT_TARGET "13.0" CACHE STRING "iOS minimum deployment target")
+set(SEURAT_IOS_DEPLOYMENT_TARGET "13.0" CACHE STRING "iOS minimum deployment target")
 
 # When sub-projects (libyuv, SRT) re-enter this toolchain via `try_compile`,
 # CMake launches a fresh CMake process that does NOT inherit parent cache vars.
 # List our platform selectors here so they survive into TryCompile runs.
 list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
-    LEONARDO_ARCH
-    LEONARDO_TARGET
-    LEONARDO_IOS_DEPLOYMENT_TARGET
+    SEURAT_ARCH
+    SEURAT_TARGET
+    SEURAT_IOS_DEPLOYMENT_TARGET
     CMAKE_OSX_ARCHITECTURES
     CMAKE_OSX_SYSROOT
     CMAKE_OSX_DEPLOYMENT_TARGET)
 
-# LEONARDO_ARCH mapping (64-bit only):
+# SEURAT_ARCH mapping (64-bit only):
 #   arm64      -> device (iphoneos)
 #   arm64-sim  -> Apple Silicon iOS simulator
 #   x86_64     -> legacy Intel iOS simulator
-if(LEONARDO_ARCH STREQUAL "arm64")
+if(SEURAT_ARCH STREQUAL "arm64")
     set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "" FORCE)
     set(IOS_PLATFORM "OS")
     set(IOS_SDK_NAME "iphoneos")
-elseif(LEONARDO_ARCH STREQUAL "arm64-sim")
+elseif(SEURAT_ARCH STREQUAL "arm64-sim")
     set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "" FORCE)
     set(IOS_PLATFORM "Simulator")
     set(IOS_SDK_NAME "iphonesimulator")
-elseif(LEONARDO_ARCH STREQUAL "x86_64")
+elseif(SEURAT_ARCH STREQUAL "x86_64")
     set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "" FORCE)
     set(IOS_PLATFORM "Simulator")
     set(IOS_SDK_NAME "iphonesimulator")
 else()
     message(FATAL_ERROR
-        "Unsupported LEONARDO_ARCH = [${LEONARDO_ARCH}]. "
+        "Unsupported SEURAT_ARCH = [${SEURAT_ARCH}]. "
         "Supported (64-bit only): arm64, arm64-sim, x86_64.")
 endif()
 
 set(CMAKE_SYSTEM_NAME "iOS")
 set(CMAKE_MACOSX_RPATH 1)
 
-# Map LEONARDO_ARCH to a concrete CMAKE_SYSTEM_PROCESSOR so downstream projects
+# Map SEURAT_ARCH to a concrete CMAKE_SYSTEM_PROCESSOR so downstream projects
 # (libyuv keys arch-specific sources off this) pick the correct sources.
-if(LEONARDO_ARCH STREQUAL "arm64" OR LEONARDO_ARCH STREQUAL "arm64-sim")
+if(SEURAT_ARCH STREQUAL "arm64" OR SEURAT_ARCH STREQUAL "arm64-sim")
     set(CMAKE_SYSTEM_PROCESSOR "arm64")
 else()
-    set(CMAKE_SYSTEM_PROCESSOR "${LEONARDO_ARCH}")
+    set(CMAKE_SYSTEM_PROCESSOR "${SEURAT_ARCH}")
 endif()
 
 execute_process(COMMAND xcode-select -print-path
@@ -129,7 +129,7 @@ set(CMAKE_RANLIB  "${TOOLCHAIN_RANLIB}" CACHE FILEPATH "ranlib")
 set(CMAKE_LINKER  "${TOOLCHAIN_LD}"     CACHE FILEPATH "linker")
 set(CMAKE_NM      "${TOOLCHAIN_NM}"     CACHE FILEPATH "nm")
 
-set(CMAKE_OSX_DEPLOYMENT_TARGET ${LEONARDO_IOS_DEPLOYMENT_TARGET})
+set(CMAKE_OSX_DEPLOYMENT_TARGET ${SEURAT_IOS_DEPLOYMENT_TARGET})
 
 set(CMAKE_FIND_ROOT_PATH ${CMAKE_OSX_SYSROOT} ${CMAKE_INSTALL_PREFIX})
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
@@ -148,11 +148,11 @@ list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_SYSTEM_VERSION=${CMAKE_SYSTEM_VERSION}")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}")
-list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_OSX_DEPLOYMENT_TARGET=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
+list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_OSX_DEPLOYMENT_TARGET=${SEURAT_IOS_DEPLOYMENT_TARGET}")
 
-# Per-arch output dir uses LEONARDO_ARCH (not CMAKE_OSX_ARCHITECTURES) so
+# Per-arch output dir uses SEURAT_ARCH (not CMAKE_OSX_ARCHITECTURES) so
 # arm64 device and arm64-sim outputs don't collide.
-set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/out/${LEONARDO_ARCH})
+set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/out/ios/${SEURAT_ARCH})
 
 list(APPEND COMMON_OPTIONS "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 list(APPEND COMMON_OPTIONS "-DCMAKE_PREFIX_PATH=${OUT_DIR}")

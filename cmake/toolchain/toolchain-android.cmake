@@ -10,10 +10,10 @@
 #   6. ndk-build found in PATH
 # =============================================================================
 
-set(LEONARDO_ANDROID_MIN_API 24 CACHE STRING "Android minimum API level (64-bit only, default 24)")
-set(LEONARDO_ANDROID_STL "c++_static" CACHE STRING "Android STL type (c++_static or c++_shared)")
+set(SEURAT_ANDROID_MIN_API 24 CACHE STRING "Android minimum API level (64-bit only, default 24)")
+set(SEURAT_ANDROID_STL "c++_static" CACHE STRING "Android STL type (c++_static or c++_shared)")
 
-foreach(_ndk_env IN ITEMS ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK NDK_R26 NDK_R25 NDK_R24 NDK_R23 NDK_R22 NDK_R21 NDK_R13)
+foreach(_ndk_env IN ITEMS ANDROID_NDK_HOME ANDROID_NDK_ROOT ANDROID_NDK NDK NDK_R28 NDK_R26 NDK_R25 NDK_R24 NDK_R23 NDK_R22 NDK_R21 NDK_R13)
     if(NOT CMAKE_ANDROID_NDK AND DEFINED ENV{${_ndk_env}})
         set(CMAKE_ANDROID_NDK "$ENV{${_ndk_env}}")
         message(STATUS "Found Android NDK via ${_ndk_env} = ${CMAKE_ANDROID_NDK}")
@@ -48,29 +48,29 @@ if(EXISTS "${_ndk_source_props}")
     endif()
 endif()
 
-message(STATUS "LEONARDO_ARCH = ${LEONARDO_ARCH}")
+message(STATUS "SEURAT_ARCH = ${SEURAT_ARCH}")
 
 set(CMAKE_SYSTEM_NAME "Android")
-set(CMAKE_ANDROID_STL_TYPE "${LEONARDO_ANDROID_STL}")
+set(CMAKE_ANDROID_STL_TYPE "${SEURAT_ANDROID_STL}")
 set(CMAKE_ANDROID_NDK_TOOLCHAIN_VERSION "clang")
 
 # 64-bit ABIs only.
-if(LEONARDO_ARCH STREQUAL "arm64-v8a")
+if(SEURAT_ARCH STREQUAL "arm64-v8a")
     set(CMAKE_ANDROID_ARCH "arm64")
     set(CMAKE_ANDROID_ARCH_ABI "arm64-v8a")
     set(ANDROID_LLVM_TRIPLE "aarch64-linux-android")
-elseif(LEONARDO_ARCH STREQUAL "x86_64")
+elseif(SEURAT_ARCH STREQUAL "x86_64")
     set(CMAKE_ANDROID_ARCH "x86_64")
     set(CMAKE_ANDROID_ARCH_ABI "x86_64")
     set(ANDROID_LLVM_TRIPLE "x86_64-linux-android")
 else()
     message(FATAL_ERROR
-        "Unsupported LEONARDO_ARCH = [${LEONARDO_ARCH}]. "
+        "Unsupported SEURAT_ARCH = [${SEURAT_ARCH}]. "
         "64-bit only build supports: arm64-v8a, x86_64.")
 endif()
 
-set(CMAKE_SYSTEM_VERSION "${LEONARDO_ANDROID_MIN_API}")
-set(CMAKE_ANDROID_API "${LEONARDO_ANDROID_MIN_API}")
+set(CMAKE_SYSTEM_VERSION "${SEURAT_ANDROID_MIN_API}")
+set(CMAKE_ANDROID_API "${SEURAT_ANDROID_MIN_API}")
 
 # Host tag
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL Linux)
@@ -94,7 +94,7 @@ endif()
 
 # api-level-specific clang wrappers provided by NDK.
 set(ANDROID_TARGET_HOST     "${ANDROID_LLVM_TRIPLE}")
-set(ANDROID_TARGET_HOST_API "${ANDROID_LLVM_TRIPLE}${LEONARDO_ANDROID_MIN_API}")
+set(ANDROID_TARGET_HOST_API "${ANDROID_LLVM_TRIPLE}${SEURAT_ANDROID_MIN_API}")
 
 # Cross-compile prefix used by configure-based libraries (openssl, etc.).
 # Picks up llvm-ar, llvm-ranlib, llvm-strip, llvm-nm under the llvm/ toolchain.
@@ -124,7 +124,7 @@ list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_ANDROID_NDK=${CMAKE_ANDROID_NDK}")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_ANDROID_STL_TYPE=${CMAKE_ANDROID_STL_TYPE}")
 list(APPEND TOOLCHAIN_OPTIONS "-DCMAKE_ANDROID_NDK_TOOLCHAIN_VERSION=clang")
 
-set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/out/${CMAKE_ANDROID_ARCH_ABI})
+set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/out/android/${CMAKE_ANDROID_ARCH_ABI})
 
 list(APPEND COMMON_OPTIONS "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 list(APPEND COMMON_OPTIONS "-DCMAKE_PREFIX_PATH=${OUT_DIR}")

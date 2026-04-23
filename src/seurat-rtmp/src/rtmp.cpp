@@ -170,7 +170,7 @@ seurat_rtmp_client_t* seurat_rtmp_create(const seurat_rtmp_config_t* cfg) {
     }
 
     // Pick plain-TCP or TLS transport based on the parsed scheme. When the
-    // build is compiled without OpenSSL (LEONARDO_CRYPTO=OFF) and rtmps://
+    // build is compiled without OpenSSL (SEURAT_CRYPTO=OFF) and rtmps://
     // was requested, make_transport returns nullptr and we reject early —
     // the caller can't distinguish "alloc failed" from "TLS not built" at
     // the create boundary, so we surface a null client either way.
@@ -202,7 +202,7 @@ const char* seurat_rtmp_strerror(int code) {
         case SEURAT_RTMP_E_REJECTED:      return "server rejected publish";
         case SEURAT_RTMP_E_TIMEOUT:       return "timed out";
         case SEURAT_RTMP_E_UNSUPPORTED:   return "feature not yet implemented";
-        case SEURAT_RTMP_E_TLS:           return "RTMPS requested but build has LEONARDO_CRYPTO=OFF";
+        case SEURAT_RTMP_E_TLS:           return "RTMPS requested but build has SEURAT_CRYPTO=OFF";
         case SEURAT_RTMP_E_URL:           return "malformed rtmp(s):// url";
         default:                          return "unknown error";
     }

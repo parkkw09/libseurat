@@ -32,12 +32,12 @@ endif()
 if(ANDROID)
     # OpenSSL 3.x Android targets:
     #   android-arm64  / android-x86_64  / android-arm  / android-x86
-    if(LEONARDO_ARCH STREQUAL "arm64-v8a")
+    if(SEURAT_ARCH STREQUAL "arm64-v8a")
         set(OPENSSL_ARCH "android-arm64")
-    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+    elseif(SEURAT_ARCH STREQUAL "x86_64")
         set(OPENSSL_ARCH "android-x86_64")
     else()
-        message(FATAL_ERROR "OpenSSL: unsupported Android arch [${LEONARDO_ARCH}]")
+        message(FATAL_ERROR "OpenSSL: unsupported Android arch [${SEURAT_ARCH}]")
     endif()
 
     set(OPENSSL_PRE_BUILD
@@ -47,7 +47,7 @@ if(ANDROID)
         -a ${ANDROID_TARGET_HOST_API})
 
     # OpenSSL 3.x android-* targets use ANDROID_NDK_ROOT for sysroot resolution.
-    list(APPEND OPENSSL_CONFIGURE_OPTIONS "-D__ANDROID_API__=${LEONARDO_ANDROID_MIN_API}")
+    list(APPEND OPENSSL_CONFIGURE_OPTIONS "-D__ANDROID_API__=${SEURAT_ANDROID_MIN_API}")
     list(APPEND OPENSSL_CONFIGURE_OPTIONS "-fPIC")
 
 elseif(IOS)
@@ -57,17 +57,17 @@ elseif(IOS)
     # pre-build script, or the xcrun hookup breaks and headers like
     # <stdlib.h>/<assert.h> disappear.
     set(_openssl_cc_override "")
-    if(LEONARDO_ARCH STREQUAL "arm64")
+    if(SEURAT_ARCH STREQUAL "arm64")
         set(OPENSSL_ARCH "ios64-xcrun")
-    elseif(LEONARDO_ARCH STREQUAL "arm64-sim")
+    elseif(SEURAT_ARCH STREQUAL "arm64-sim")
         set(OPENSSL_ARCH "iossimulator-arm64-xcrun")
-    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+    elseif(SEURAT_ARCH STREQUAL "x86_64")
         # iossimulator-xcrun has no baked-in -arch, so on Apple Silicon hosts
         # it defaults to arm64. Override CC to force x86_64.
         set(OPENSSL_ARCH "iossimulator-xcrun")
         set(_openssl_cc_override "xcrun -sdk iphonesimulator cc -arch x86_64")
     else()
-        message(FATAL_ERROR "OpenSSL: unsupported iOS arch [${LEONARDO_ARCH}]")
+        message(FATAL_ERROR "OpenSSL: unsupported iOS arch [${SEURAT_ARCH}]")
     endif()
 
     if(_openssl_cc_override)
@@ -85,12 +85,12 @@ elseif(IOS)
 
 elseif(APPLE)
     # macOS native (no pre-build wrapper needed — Configure handles host detection).
-    if(LEONARDO_ARCH STREQUAL "arm64")
+    if(SEURAT_ARCH STREQUAL "arm64")
         set(OPENSSL_ARCH "darwin64-arm64-cc")
-    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+    elseif(SEURAT_ARCH STREQUAL "x86_64")
         set(OPENSSL_ARCH "darwin64-x86_64-cc")
     else()
-        message(FATAL_ERROR "OpenSSL: unsupported macOS arch [${LEONARDO_ARCH}]")
+        message(FATAL_ERROR "OpenSSL: unsupported macOS arch [${SEURAT_ARCH}]")
     endif()
 
 elseif(WIN32)

@@ -38,17 +38,17 @@ set(_yuv_args
 if(ANDROID)
     list(APPEND _yuv_args
         "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_ANDROID_NDK}/build/cmake/android.toolchain.cmake"
-        "-DANDROID_ABI=${LEONARDO_ARCH}"
-        "-DANDROID_PLATFORM=android-${LEONARDO_ANDROID_MIN_API}"
+        "-DANDROID_ABI=${SEURAT_ARCH}"
+        "-DANDROID_PLATFORM=android-${SEURAT_ANDROID_MIN_API}"
         "-DANDROID_STL=c++_static")
 
 elseif(IOS)
     # Forward our iOS toolchain so the same arch/SDK logic is reused.
     list(APPEND _yuv_args
         "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchain/toolchain-ios.cmake"
-        "-DLEONARDO_TARGET:STRING=IOS"
-        "-DLEONARDO_ARCH:STRING=${LEONARDO_ARCH}"
-        "-DLEONARDO_IOS_DEPLOYMENT_TARGET:STRING=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
+        "-DSEURAT_TARGET:STRING=IOS"
+        "-DSEURAT_ARCH:STRING=${SEURAT_ARCH}"
+        "-DSEURAT_IOS_DEPLOYMENT_TARGET:STRING=${SEURAT_IOS_DEPLOYMENT_TARGET}")
 
 elseif(APPLE)
     # libyuv keys NEON / NEON64 / SVE source-lists off CMAKE_SYSTEM_PROCESSOR.
@@ -57,16 +57,16 @@ elseif(APPLE)
     # into cross-compile mode (CMAKE_SYSTEM_NAME=Darwin) so that our explicit
     # SYSTEM_PROCESSOR sticks.
     list(APPEND _yuv_args
-        "-DCMAKE_OSX_ARCHITECTURES=${LEONARDO_ARCH}"
-        "-DCMAKE_OSX_DEPLOYMENT_TARGET=${LEONARDO_OSX_DEPLOYMENT_TARGET}"
+        "-DCMAKE_OSX_ARCHITECTURES=${SEURAT_ARCH}"
+        "-DCMAKE_OSX_DEPLOYMENT_TARGET=${SEURAT_OSX_DEPLOYMENT_TARGET}"
         "-DCMAKE_SYSTEM_NAME=Darwin"
-        "-DCMAKE_SYSTEM_PROCESSOR=${LEONARDO_ARCH}")
+        "-DCMAKE_SYSTEM_PROCESSOR=${SEURAT_ARCH}")
 
 elseif(MSVC)
     # MSVC: default generator suffices; nothing extra to do.
 
 else()
-    message(FATAL_ERROR "libyuv: target [${LEONARDO_TARGET}] not supported")
+    message(FATAL_ERROR "libyuv: target [${SEURAT_TARGET}] not supported")
 endif()
 
 message(STATUS "LIBYUV_GIT_REPO = ${LIBYUV_GIT_REPO}")

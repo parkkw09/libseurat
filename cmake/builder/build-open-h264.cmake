@@ -34,19 +34,19 @@ set(_oh_env_ldflags "")
 set(_oh_make_args "PREFIX=${OPEN_H264_OUT_DIR}")
 
 if(ANDROID)
-    if(LEONARDO_ARCH STREQUAL "arm64-v8a")
+    if(SEURAT_ARCH STREQUAL "arm64-v8a")
         set(_oh_arch "arm64")
-    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+    elseif(SEURAT_ARCH STREQUAL "x86_64")
         set(_oh_arch "x86_64")
     else()
-        message(FATAL_ERROR "OpenH264: unsupported Android arch [${LEONARDO_ARCH}]")
+        message(FATAL_ERROR "OpenH264: unsupported Android arch [${SEURAT_ARCH}]")
     endif()
 
     list(APPEND _oh_make_args
         "OS=android"
         "ARCH=${_oh_arch}"
         "NDKROOT=${CMAKE_ANDROID_NDK}"
-        "TARGET=android-${LEONARDO_ANDROID_MIN_API}"
+        "TARGET=android-${SEURAT_ANDROID_MIN_API}"
         "TOOLCHAINPREFIX=${ANDROID_TOOLCHAIN_BIN}/llvm-")
 
     set(_oh_env_cc     "${ANDROID_TOOLCHAIN_BIN}/${ANDROID_TARGET_HOST_API}-clang")
@@ -55,27 +55,27 @@ if(ANDROID)
     set(_oh_env_ranlib "${ANDROID_TOOLCHAIN_BIN}/llvm-ranlib")
 
 elseif(IOS)
-    if(LEONARDO_ARCH STREQUAL "arm64")
+    if(SEURAT_ARCH STREQUAL "arm64")
         set(_oh_arch "arm64")
         set(_oh_sdk  "iphoneos")
-        set(_oh_min_flag "-miphoneos-version-min=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
-    elseif(LEONARDO_ARCH STREQUAL "arm64-sim")
+        set(_oh_min_flag "-miphoneos-version-min=${SEURAT_IOS_DEPLOYMENT_TARGET}")
+    elseif(SEURAT_ARCH STREQUAL "arm64-sim")
         set(_oh_arch "arm64")
         set(_oh_sdk  "iphonesimulator")
-        set(_oh_min_flag "-mios-simulator-version-min=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
-    elseif(LEONARDO_ARCH STREQUAL "x86_64")
+        set(_oh_min_flag "-mios-simulator-version-min=${SEURAT_IOS_DEPLOYMENT_TARGET}")
+    elseif(SEURAT_ARCH STREQUAL "x86_64")
         set(_oh_arch "x86_64")
         set(_oh_sdk  "iphonesimulator")
-        set(_oh_min_flag "-mios-simulator-version-min=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
+        set(_oh_min_flag "-mios-simulator-version-min=${SEURAT_IOS_DEPLOYMENT_TARGET}")
     else()
-        message(FATAL_ERROR "OpenH264: unsupported iOS arch [${LEONARDO_ARCH}]")
+        message(FATAL_ERROR "OpenH264: unsupported iOS arch [${SEURAT_ARCH}]")
     endif()
 
     list(APPEND _oh_make_args
         "OS=ios"
         "ARCH=${_oh_arch}"
         "SDK=${_oh_sdk}"
-        "SDK_MIN=${LEONARDO_IOS_DEPLOYMENT_TARGET}")
+        "SDK_MIN=${SEURAT_IOS_DEPLOYMENT_TARGET}")
 
     set(_oh_env_cc      "xcrun -sdk ${_oh_sdk} clang")
     set(_oh_env_cxx     "xcrun -sdk ${_oh_sdk} clang++")
@@ -83,21 +83,21 @@ elseif(IOS)
     set(_oh_env_ldflags "-arch ${_oh_arch} ${_oh_min_flag}")
 
 elseif(APPLE)
-    if(NOT LEONARDO_ARCH MATCHES "^(arm64|x86_64)$")
-        message(FATAL_ERROR "OpenH264: unsupported OSX arch [${LEONARDO_ARCH}]")
+    if(NOT SEURAT_ARCH MATCHES "^(arm64|x86_64)$")
+        message(FATAL_ERROR "OpenH264: unsupported OSX arch [${SEURAT_ARCH}]")
     endif()
 
     list(APPEND _oh_make_args
         "OS=darwin"
-        "ARCH=${LEONARDO_ARCH}")
+        "ARCH=${SEURAT_ARCH}")
 
-    set(_oh_env_cc      "clang -arch ${LEONARDO_ARCH} -mmacosx-version-min=${LEONARDO_OSX_DEPLOYMENT_TARGET}")
-    set(_oh_env_cxx     "clang++ -arch ${LEONARDO_ARCH} -mmacosx-version-min=${LEONARDO_OSX_DEPLOYMENT_TARGET}")
-    set(_oh_env_cflags  "-arch ${LEONARDO_ARCH} -mmacosx-version-min=${LEONARDO_OSX_DEPLOYMENT_TARGET}")
-    set(_oh_env_ldflags "-arch ${LEONARDO_ARCH} -mmacosx-version-min=${LEONARDO_OSX_DEPLOYMENT_TARGET}")
+    set(_oh_env_cc      "clang -arch ${SEURAT_ARCH} -mmacosx-version-min=${SEURAT_OSX_DEPLOYMENT_TARGET}")
+    set(_oh_env_cxx     "clang++ -arch ${SEURAT_ARCH} -mmacosx-version-min=${SEURAT_OSX_DEPLOYMENT_TARGET}")
+    set(_oh_env_cflags  "-arch ${SEURAT_ARCH} -mmacosx-version-min=${SEURAT_OSX_DEPLOYMENT_TARGET}")
+    set(_oh_env_ldflags "-arch ${SEURAT_ARCH} -mmacosx-version-min=${SEURAT_OSX_DEPLOYMENT_TARGET}")
 
 else()
-    message(FATAL_ERROR "OpenH264: target [${LEONARDO_TARGET}] not supported")
+    message(FATAL_ERROR "OpenH264: target [${SEURAT_TARGET}] not supported")
 endif()
 
 # Build the `cmake -E env ...` prefix, only emitting vars we actually set.

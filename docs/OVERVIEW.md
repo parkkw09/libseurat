@@ -1,6 +1,6 @@
-# libseurat (leonardo) — 프로젝트 기본 정보
+# libseurat (seurat) — 프로젝트 기본 정보
 
-최종 갱신: 2026-04-22
+최종 갱신: 2026-04-23
 
 > 본 문서는 `libseurat`의 **정적(changeless) 정보**만 담습니다.
 > - 진행 상태 → `PROGRESS.md`
@@ -10,13 +10,13 @@
 
 ## 1. 프로젝트 역할
 
-`libseurat` (코드명 `leonardo`)는 모바일/데스크톱 애플리케이션에서 사용할
+`libseurat` (코드명 `seurat`)는 모바일/데스크톱 애플리케이션에서 사용할
 **라이브 스트리밍 송출(publish) 전용 미디어 라이브러리**입니다.
 
 CMake `ExternalProject_Add` 기반으로 허용 라이선스 범위의 3rd-party 오픈소스를
-크로스컴파일하고, 내부 컴포넌트(`seurat-flv`, `seurat-rtmp` 등)와 함께 묶어
-플랫폼별 정적 아카이브 또는 배포 산출물(AAR / xcframework / Universal `.a`)을
-생성합니다.
+크로스컴파일하고, 내부 컴포넌트(`seurat-flv`, `seurat-rtmp`, `seurat-*-native` 등)와 함께 묶어
+플랫폼별 단일 동적 라이브러리(`libseurat.so`, `libseurat.dylib`)를 포함한 배포 산출물(AAR / xcframework / OSX Bundle)을
+생성합니다. 과거의 파편화된 정적 아카이브를 하나로 통합하여 제공하는 것이 특징입니다.
 
 ### 1.1 제공 기능
 
@@ -25,7 +25,7 @@ CMake `ExternalProject_Add` 기반으로 허용 라이선스 범위의 3rd-party
 | **송출(주 용도)** | RTMP / RTMPS publish | YouTube Live, Twitch, 치지직, SOOP, Facebook Live 등 |
 | **송출(보조 용도)** | SRT publish | 자체 미디어 서버, 방송 장비, SRT→RTMP 게이트웨이 |
 | **영상 처리** | YUV 색공간 변환, 스케일링, 블렌딩 | `libyuv` |
-| **영상 인코딩** | H.264 Main/High | `OpenH264` (Cisco 로열티 대납 구조) |
+| **영상 인코딩** | H.264 Main/High | 플랫폼 네이티브 인코더 wrapper (`seurat-h264-native`) |
 | **음성 인코딩** | AAC-LC | 플랫폼 네이티브 인코더 wrapper 예정 (`seurat-aac-native`) |
 | **암호화** | TLS 1.2+ (RTMPS) | OpenSSL 3.3.2 |
 | **먹싱** | FLV / MPEG-TS | `seurat-flv` 구현, `seurat-mpegts` 미구현 |
@@ -56,12 +56,12 @@ CMake `ExternalProject_Add` 기반으로 허용 라이선스 범위의 3rd-party
 
 | 특허 | 처리 방식 |
 |---|---|
-| H.264 | **OpenH264 (Cisco 프리빌트 바이너리)** — MPEG-LA 로열티를 Cisco가 대납 |
+| H.264 | **플랫폼 네이티브 인코더** (VideoToolbox / MediaCodec / MFT) — 로열티를 OS 제조사가 대납 |
 | AAC | **플랫폼 네이티브 인코더** (AudioToolbox / MediaCodec / MFT) — 로열티를 OS 제조사가 대납 |
 
-> ⚠️ OpenH264를 **소스 빌드**하면 Cisco의 MPEG-LA 로열티 대납 혜택을 받지 못합니다.
-> 상용 배포에서는 Cisco 제공 프리빌트 바이너리를 런타임 로드하는 경로로 전환해야
-> 합니다. 전환 작업은 `TODO.md` 참조.
+> ⚠️ OpenH264 소스 빌드는 기본적으로 **OFF**되어 있으며, 개발 및 테스트용 또는 특수 플랫폼의
+> 소프트웨어 폴백(opt-in) 용도로만 제한적으로 지원됩니다. 상용 배포에서는 반드시 플랫폼 네이티브
+> 인코더를 사용해야 합니다.
 > 근거: [Cisco OpenH264 FAQ](https://www.openh264.org/faq.html)
 
 ### 2.3 배제 컴포넌트 및 사유 (Decision Log)
@@ -86,9 +86,9 @@ CMake `ExternalProject_Add` 기반으로 허용 라이선스 범위의 3rd-party
 
 | 플랫폼 | 아키텍처 | 산출물 |
 |---|---|---|
-| Android | `arm64-v8a`, `x86_64` | `dist/android/seurat.aar` (`jni/<abi>/*.a`, `jni/include/`) |
-| iOS | `arm64` (device), `arm64-sim`, `x86_64` (sim) | `dist/ios/lib<name>.xcframework` |
-| macOS | `arm64` (Apple Silicon), `x86_64` | `dist/osx/lib/lib<name>.a` (lipo universal) |
+| Android | `arm64-v8a`, `x86_64` | `dist/android/seurat.aar` (`jni/<abi>/libseurat.so` 등) |
+| iOS | `arm64` (device), `arm64-sim`, `x86_64` (sim) | `dist/ios/Libseurat.xcframework` |
+| macOS | `arm64` (Apple Silicon), `x86_64` | `dist/osx/lib/libseurat.dylib` (lipo universal) |
 | Windows (MSVC) | `x86_64` | 미구현 (`TODO.md` 참조) |
 
 ### 3.2 최소 환경 요구사항
@@ -107,13 +107,14 @@ CMake `ExternalProject_Add` 기반으로 허용 라이선스 범위의 3rd-party
 ## 4. 기술 스택 (컴포넌트 구성)
 
 ```
-libseurat (leonardo)
+libseurat (seurat)
 │
 ├─ [영상 소스 처리]
 │   └─ libyuv          색공간 변환 + 더미 이미지 합성
 │
 ├─ [영상 인코딩]
-│   └─ OpenH264        H.264 Main/High 프로파일 인코딩
+│   ├─ H.264 Native    플랫폼별 네이티브 wrapper (seurat-h264-native, 기본)
+│   └─ OpenH264        H.264 소프트웨어 인코더 (폴백용, 기본 OFF)
 │
 ├─ [음성 인코딩]
 │   └─ AAC Native      플랫폼별 네이티브 wrapper
@@ -138,7 +139,7 @@ libseurat (leonardo)
 | 라이브러리 | 버전 | 라이선스 | 용도 | 소스 |
 |---|---|---|---|---|
 | OpenSSL | 3.3.x / 3.4.x | Apache 2.0 | TLS (RTMPS), 암호화 | https://www.openssl.org/source/ |
-| OpenH264 | 2.4.x+ | BSD 2-Clause | H.264 인코딩 | https://github.com/cisco/openh264 |
+| OpenH264 | 2.4.x+ | BSD 2-Clause | H.264 인코딩 (선택적) | https://github.com/cisco/openh264 |
 | libyuv | main (rolling) | BSD 3-Clause | 색공간 변환, 스케일링 | https://chromium.googlesource.com/libyuv/libyuv |
 | libsrt | 1.5.x+ | MPL 2.0 | SRT 전송 | https://github.com/Haivision/srt |
 | libmpegts | 최신 | ISC | MPEG-TS 먹싱 (예정) | https://github.com/kierank/libmpegts |
@@ -148,29 +149,32 @@ libseurat (leonardo)
 | 이름 | 역할 | 예상 규모 |
 |---|---|---|
 | `seurat-flv` | FLV 태그 먹싱 (video/audio/metadata) | ~500 LOC |
-| `seurat-rtmp` | RTMP(S) 클라이언트 (송출 전용) | ~2,000 LOC |
-| `seurat-aac-native` | 플랫폼별 AAC 인코더 wrapper | 플랫폼별 ~300 LOC |
+| `seurat-rtmp` | RTMP(S) 클라이언트 (송출 전용) | ~2,380 LOC |
+| `seurat-h264-native` | 플랫폼별 H.264 인코더 wrapper | 플랫폼별 ~300 LOC |
+| `seurat-aac-native` | 플랫폼별 AAC 인코더 wrapper | 플랫폼별 ~200 LOC |
 | `seurat-mpegts` | MPEG-TS 먹서 (SRT 페이로드용) | TBD |
 
 ### 4.3 CMake 옵션
 
 ```cmake
 # [외부 의존성 — ExternalProject 기반]
-option(LEONARDO_CRYPTO   "OpenSSL (TLS for RTMPS, crypto)"    ON)
-option(LEONARDO_OPENH264 "Cisco OpenH264 (H.264 encoder)"     ON)
-option(LEONARDO_YUV      "libyuv (colorspace, scaling)"       ON)
-option(LEONARDO_SRT      "SRT (pro workflow transport)"       ON)
+option(SEURAT_CRYPTO   "OpenSSL (TLS for RTMPS, crypto)"    ON)
+option(SEURAT_OPENH264 "Cisco OpenH264 (H.264 encoder)"     OFF)
+option(SEURAT_YUV      "libyuv (colorspace, scaling)"       ON)
+option(SEURAT_SRT      "SRT (pro workflow transport)"       ON)
 
 # [자체 송출 컴포넌트]
-option(LEONARDO_FLV      "Build seurat-flv (FLV muxer)"       ON)
-option(LEONARDO_RTMP     "Build seurat-rtmp (RTMP publisher)" ON)
+option(SEURAT_FLV      "Build seurat-flv (FLV muxer)"       ON)
+option(SEURAT_RTMP     "Build seurat-rtmp (RTMP publisher)" ON)
+option(SEURAT_H264_NATIVE "Build seurat-h264-native"        ON)
+option(SEURAT_AAC_NATIVE  "Build seurat-aac-native"         ON)
 
 # [보류 — 설계/구현 완료 전까지 OFF]
-option(LEONARDO_RTC      "WebRTC (experimental)"              OFF)
+option(SEURAT_RTC      "WebRTC (experimental)"              OFF)
 ```
 
-- `LEONARDO_RTMP=ON`은 `LEONARDO_FLV=ON`을 강제합니다 (`rtmp → flv` 의존).
-- 타겟/아키텍처는 `LEONARDO_TARGET` (`ANDROID|IOS|OSX|MSVC`)과 `LEONARDO_ARCH`로 지정.
+- `SEURAT_RTMP=ON`은 `SEURAT_FLV=ON`을 강제합니다 (`rtmp → flv` 의존).
+- 타겟/아키텍처는 `SEURAT_TARGET` (`ANDROID|IOS|OSX|MSVC`)과 `SEURAT_ARCH`로 지정.
 
 ---
 
@@ -183,7 +187,7 @@ option(LEONARDO_RTC      "WebRTC (experimental)"              OFF)
     ↓ NV12/NV21
     ↓ libyuv (NV12→I420, 스케일링, 로고 합성)
     ↓ I420
-    ↓ OpenH264
+    ↓ H.264 Native (VideoToolbox / MediaCodec / MFT)
     ↓ H.264 NAL units
     ↓ seurat-flv (FLV video tag)
     ↓
@@ -240,13 +244,13 @@ option(LEONARDO_RTC      "WebRTC (experimental)"              OFF)
     │
     ▼ per-ARCH 루프
     cmake -S . -B WORK/${TARGET}-${ARCH}
-          -D LEONARDO_TARGET=${TARGET} -D LEONARDO_ARCH=${ARCH}
-    │       → out/${ARCH}/{include,lib}/ 에 per-arch 정적 산출물 설치
+          -D SEURAT_TARGET=${TARGET} -D SEURAT_ARCH=${ARCH}
+    │       → out/<platform>/${ARCH}/{include,lib}/ 에 per-arch 산출물 설치
     │
     ▼ 전 ARCH 완료 후 packaging 단계
-    scripts/package-android.sh  out/ dist/android "${ARCHS}"  → dist/android/seurat.aar
-    scripts/package-ios.sh      out/ dist/ios     "${ARCHS}"  → dist/ios/*.xcframework
-    scripts/package-osx.sh      out/ dist/osx     "${ARCHS}"  → dist/osx/{lib,include}/
+    scripts/package-android.sh  out/android dist/android "${ARCHS}"  → dist/android/seurat.aar
+    scripts/package-ios.sh      out/ios     dist/ios     "${ARCHS}"  → dist/ios/Libseurat.xcframework
+    scripts/package-osx.sh      out/osx     dist/osx     "${ARCHS}"  → dist/osx/{lib,include}/
     # MSVC 패키징은 미구현
 ```
 
@@ -254,17 +258,25 @@ option(LEONARDO_RTC      "WebRTC (experimental)"              OFF)
 
 ```
 out/
-├── arm64/        # iOS device / OSX arm64
-├── arm64-v8a/    # Android
-├── arm64-sim/    # iOS simulator (Apple Silicon)
-└── x86_64/       # OSX / iOS simulator / Android / MSVC
-    ├── include/{openssl,srt,libyuv,wels,seurat}/*.h
-    └── lib/lib{crypto,ssl,srt,yuv,openh264,seurat-flv,seurat-rtmp}.a
+├── android/
+│   ├── arm64-v8a/
+│   └── x86_64/
+├── ios/
+│   ├── arm64/
+│   ├── arm64-sim/
+│   └── x86_64/
+└── osx/
+    ├── arm64/
+    └── x86_64/
+        ├── include/{openssl,srt,libyuv,wels,seurat}/*.h
+        └── lib/lib{crypto,ssl,srt,yuv,seurat}.*
 
 dist/
 ├── android/seurat.aar
 ├── ios/Libseurat.xcframework
-└── osx/{lib,include}/
+└── osx/
+    ├── include/
+    └── lib/libseurat.dylib
 ```
 
 ---

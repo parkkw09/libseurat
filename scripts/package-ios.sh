@@ -3,7 +3,7 @@
 # iOS packaging: build one .xcframework per built library (openssl, openh264,
 # libyuv, srt, seurat-*) combining the arm64 device slice and a simulator slice.
 #
-# Per LEONARDO_ARCH, the build places artifacts at:
+# Per SEURAT_ARCH, the build places artifacts at:
 #   out/arm64/        (iphoneos device)
 #   out/arm64-sim/    (iphonesimulator arm64)
 #   out/x86_64/       (iphonesimulator x86_64)
