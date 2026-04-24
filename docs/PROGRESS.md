@@ -133,7 +133,7 @@
 통계(`bytes_sent_total`, `bytes_recv_total`, `rtmp_messages_sent`,
 `video_frames_sent`, `audio_frames_sent`)는 `seurat_rtmp_get_stats`로 노출.
 
-#### RTMPS(TLS) — Phase D 세부
+#### RTMPS(TLS) — Phase D + E.1/E.2 세부
 
 - 구현: `src/seurat-rtmp/src/rtmp_tls.cpp`
 - 구조: `TlsTransport : public Transport`가 `PosixTransport posix_`를 멤버로 소유 (데코레이터 패턴)
@@ -145,9 +145,57 @@
   - `SSL_CTX_new(TLS_client_method())` + `SSL_CTX_set_min_proto_version(TLS1_2_VERSION)`
   - `SSL_CTX_set_mode(AUTO_RETRY | ENABLE_PARTIAL_WRITE | ACCEPT_MOVING_WRITE_BUFFER)`
   - `SSL_set_tlsext_host_name()` — SNI (YouTube/Twitch/SOOP 공유 엔드포인트 필수)
-- 팩토리: `rtmp_internal.h::make_transport(bool use_tls)`가 `SEURAT_CRYPTO` 여부에 따라
-  `make_tls_transport()` 또는 `new PosixTransport()`로 디스패치.
-- **인증서 검증은 1차 구현에서 `SSL_VERIFY_NONE`** — 상세는 `TODO.md` Phase E 참조.
+- 팩토리: `rtmp_internal.h::make_transport(bool use_tls, const TlsOptions&)`가
+  `SEURAT_CRYPTO` 여부에 따라 `make_tls_transport(opts)` 또는 `new PosixTransport()`로 디스패치.
+
+#### Phase E.1 — 공개 config API 확장 (2026-04-24)
+
+- `seurat_rtmp_config_t`에 2개 필드 추가:
+  - `const char* ca_bundle_pem` — in-memory PEM 번들. NULL 허용(기본 경로 폴백).
+  - `int tls_insecure` — 기본 0. 개발용 우회(`SSL_VERIFY_NONE` + 호스트명 검증 생략).
+- 내부 `Client::cfg_ca_bundle_pem` (std::string) 필드로 안정 저장. `copy_config()`에서 자동 복사.
+- 오류 코드 `SEURAT_RTMP_E_TLS` 의미 확대:
+  "RTMPS requested but build has SEURAT_CRYPTO=OFF" → "TLS setup / handshake / verify failed"
+
+#### Phase E.2 — 인증서 검증 ON (2026-04-24)
+
+- `TlsOptions` 내부 구조체를 `rtmp_internal.h`에 정의. `TlsTransport`가 생성자에서 소유.
+- 기본 동작(`tls_insecure=0`):
+  - `SSL_CTX_set_verify(SSL_VERIFY_PEER)` 활성화
+  - `opts_.ca_bundle_pem`이 있으면 `BIO_new_mem_buf` → `PEM_read_bio_X509` 루프 →
+    `X509_STORE_add_cert`로 CTX trust store에 주입 (다중 PEM 지원)
+  - 추가로 `SSL_CTX_set_default_verify_paths()` 호출 (macOS/Linux 폴백용,
+    iOS/Android에선 no-op)
+  - `SSL_get0_param()` 경유로 `X509_VERIFY_PARAM_set1_host(host)` +
+    `X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS` 플래그 주입 (SAN/CN 매칭, 부분 와일드카드 배제)
+- `tls_insecure=1`은 구 Phase D 동작(`SSL_VERIFY_NONE`, 호스트명 생략)과 동일 — 자체 서명 테스트 서버용.
+- 설정/핸드셰이크/검증 실패는 모두 `SEURAT_RTMP_E_TLS`로 통일해서 상위에 surface.
+
+#### Phase E.3 — 플랫폼 CA 번들 자동 추출 (2026-04-24)
+
+- 새 공개 API: `const char* seurat_rtmp_platform_ca_bundle_pem(void)`
+  - `std::call_once`로 첫 호출 시 추출 → 프로세스 lifetime 동안 캐시.
+  - 반환값은 라이브러리가 소유, 호출자는 free 금지.
+  - `cfg.ca_bundle_pem = seurat_rtmp_platform_ca_bundle_pem();` 한 줄로 시스템 앵커 주입.
+- 구현: `src/seurat-rtmp/src/rtmp_ca_bundle.cpp` (신규, ~200 LOC)
+  - **macOS**: `SecTrustCopyAnchorCertificates` → `SecCertificateCopyData`로 DER
+    획득 → RFC 4648 base64 인코딩 + PEM 마커 래핑. 자체 base64 인코더 포함
+    (OpenSSL 의존 제거, `SEURAT_CRYPTO=OFF` 빌드도 컴파일 가능).
+  - **Android**: `/apex/com.android.conscrypt/cacerts` → `/system/etc/security/cacerts`
+    순으로 디렉터리 스캔. 각 파일에서 `BEGIN CERTIFICATE` / `END CERTIFICATE`
+    블록만 추출해 concat (hash.0 파일 trailing metadata 안전 무시).
+  - **iOS**: `SecTrustCopyAnchorCertificates`가 시스템 앵커를 반환하지 않음
+    (앱이 추가한 앵커만) → 보통 NULL 반환, 헤더에 "앱이 직접 번들 제공" 명시.
+  - **Windows/기타**: NULL 반환 (후속 작업).
+- 링크: 루트 `CMakeLists.txt`에 `-framework Security` 추가 (Apple).
+- 검증:
+  - OSX arm64 Dev 빌드 → `libseurat.dylib` 100% built.
+  - 런타임 테스트(로컬 macOS): 156 CA / 235,573 bytes PEM 반환, BEGIN/END
+    마커 & base64 포맷 정상.
+  - iOS simulator(arm64-sim) Dev 빌드 → `libseurat.dylib` 100% built, Security.framework 링크 확인.
+  - Android arm64-v8a Dev 빌드 → `libseurat.so` + `seurat.aar` 패키징 완료.
+
+잔여 (Phase E.4): 실제 YouTube/Twitch/치지직/SOOP RTMPS 엔드포인트 E2E 송출 검증.
 
 ### 4.3 `seurat-aac-native` 및 `seurat-h264-native` — HW 코덱 래퍼 ✅ 완료 (Apple/Android)
 
@@ -205,3 +253,5 @@
 | 2026-04-23 | Android 빌드 완전 검증 — NDK r26 (Clang 17) 도입. libyuv `main` (neon64/SVE 포함) 빌드 성공. `seurat.aar` (17MB, arm64-v8a+x86_64) 생성 및 공개 API 11종 심볼 확인. libyuv neon64 타겟이 Clang 9 미지원임을 확인 → Android 크로스컴파일은 NDK r26 이상 필수. |
 | 2026-04-23 | iOS 빌드 완전 검증 — AppleClang 21 / iPhoneOS 26.4 SDK. 7종 xcframework 생성 (device: arm64, simulator: arm64+x86_64 lipo fat). |
 | 2026-04-23 | **네이티브 코덱 및 단일 라이브러리 통합** — `SEURAT_OPENH264` 기본값 OFF 및 네이티브 HW 코덱 전환. Apple (VideoToolbox/AudioToolbox) 및 Android (MediaCodec) 용 H.264/AAC 코덱 `seurat-*_native` 완전 구현. 모든 정적 아카이브를 하나로 묶는 `libseurat` 단일 동적 라이브러리(macOS: `libseurat.dylib`, Android: `libseurat.so`) 빌드 파이프라인 구성. 플랫폼별로 CMake `out` 폴더 경로 격리 작업 완료. |
+| 2026-04-24 | Phase E.1/E.2 완료 — `seurat_rtmp_config_t`에 `ca_bundle_pem` / `tls_insecure` 추가. `TlsTransport`가 기본으로 `SSL_VERIFY_PEER` + `X509_VERIFY_PARAM_set1_host` 호스트명 검증 수행. `TlsOptions` 구조체 도입, `make_transport` 시그니처가 TLS 옵션을 전달받도록 확장. RTMPS MITM 방어의 1차 경로 완성. `SEURAT_RTMP_E_TLS`의 의미를 "TLS 관련 모든 실패"로 확장. OSX Dev 빌드 통과. `TODO.md`에 `Phase F(RTMP 안정성 / 관찰성)` 신규 섹션 추가(Window Ack 응답, User Control 응답, 재연결, 관찰성 지표). |
+| 2026-04-24 | Phase E.3 완료 — 새 공개 API `seurat_rtmp_platform_ca_bundle_pem()` 추가 (`src/seurat-rtmp/src/rtmp_ca_bundle.cpp`). macOS는 `SecTrustCopyAnchorCertificates`로 시스템 앵커 → DER → 자체 구현 base64 → PEM 블록으로 변환, Android는 `/apex/com.android.conscrypt/cacerts` 및 `/system/etc/security/cacerts` 디렉터리 스캔 방식. iOS/Windows는 NULL(헤더 주석에 대응 방안 명시). `CMakeLists.txt`에 `-framework Security` 추가. OSX/iOS-sim/Android-arm64 Dev 빌드 3종 통과. macOS 런타임 프로브에서 156 CA / 235 KB PEM 정상 추출 확인. |

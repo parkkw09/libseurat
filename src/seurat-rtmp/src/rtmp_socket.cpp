@@ -194,13 +194,16 @@ void PosixTransport::close() {
 }
 
 // Factory. Dispatches to the TLS transport when requested and available,
-// otherwise returns a plain TCP transport. Returning nullptr for a TLS
-// request means the build was compiled without OpenSSL support
-// (SEURAT_CRYPTO=OFF); the caller translates that to E_TLS.
-Transport* make_transport(bool use_tls) {
+// otherwise returns a plain TCP transport. `tls_opts` is forwarded only
+// when a TLS transport is actually constructed; plain-TCP callers can
+// pass a default-initialised struct. Returning nullptr for a TLS request
+// means the build was compiled without OpenSSL support (SEURAT_CRYPTO=OFF);
+// the caller translates that to E_TLS.
+Transport* make_transport(bool use_tls, const TlsOptions& tls_opts) {
 #if defined(SEURAT_RTMP_WITH_TLS) && SEURAT_RTMP_WITH_TLS
-    if (use_tls) return make_tls_transport();
+    if (use_tls) return make_tls_transport(tls_opts);
 #else
+    (void)tls_opts;
     if (use_tls) return nullptr;
 #endif
     return new (std::nothrow) PosixTransport();

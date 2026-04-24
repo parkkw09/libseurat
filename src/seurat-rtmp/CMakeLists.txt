@@ -20,6 +20,7 @@
 set(_rtmp_sources
     src/rtmp.cpp
     src/rtmp_amf0.cpp
+    src/rtmp_ca_bundle.cpp
     src/rtmp_chunk.cpp
     src/rtmp_handshake.cpp
     src/rtmp_socket.cpp

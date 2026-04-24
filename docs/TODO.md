@@ -91,17 +91,34 @@ Use of uninitialized value in join or string at
 | AAR prefab 메타데이터 (`prefab/*.json`) | P3 | Gradle `prefab` feature 지원. |
 | E2E 테스트 (YouTube / Twitch / SOOP 실서버) | P2 | RTMPS 인증서 검증(Phase E) 활성화 후 정식 검증. |
 
-### Phase E — 보안 강화 (RTMPS 인증서 검증)
+### Phase E — RTMPS 보안 강화 (인증서 검증)
 
 **목적**: Phase D의 `SSL_VERIFY_NONE` 1차 구현을 프로덕션 수준으로 상향.
-(현재 상태의 상세는 `PROGRESS.md §4.2`)
+**근거**: MITM 공격으로 스트림 키 탈취 가능 → 현재 상태는 상용 배포 금지.
+(현재 구현 상세는 `PROGRESS.md §4.2`, 관련 코드 `src/seurat-rtmp/src/rtmp_tls.cpp:88-90`)
 
-| 작업 | 우선순위 | 메모 |
-|---|---|---|
-| 플랫폼별 CA 번들 주입 | P1 | iOS Security framework / Android system keystore / Mozilla PEM 번들 중 택일. OpenSSL의 `SSL_CTX_set_default_verify_paths()`만으로는 iOS/Android에서 신뢰 앵커가 비어 있음. |
-| `X509_VERIFY_PARAM_set1_host` 호스트명 검증 | P1 | MITM(중간자 공격) 방어 활성화. |
-| `seurat_rtmp_config_t` 확장 | P1 | `tls_insecure`(개발용 우회) 또는 `ca_bundle_pem` 필드 추가. |
-| 실서버 인증서 체인 E2E 테스트 | P2 | YouTube / Twitch / 치지직 / SOOP 엔드포인트 각각 검증. |
+| # | 작업 | 우선순위 | 상태 | 메모 |
+|---|---|---|---|---|
+| E.1 | `seurat_rtmp_config_t` 확장 | P1 | ✅ 2026-04-24 | `ca_bundle_pem`(in-memory PEM, NULL 가능), `tls_insecure`(개발용 우회, 기본 0) 필드 추가. |
+| E.2 | `X509_VERIFY_PARAM_set1_host` 호스트명 검증 | P1 | ✅ 2026-04-24 | MITM 방어 활성화. `SSL_get0_param()` + `X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS`. CA 미확보 시 `SEURAT_RTMP_E_TLS`. |
+| E.3 | 플랫폼 CA 번들 자동 추출 | P1 | ✅ 2026-04-24 (macOS/Android) / 🟡 (iOS/Windows 후속) | 신규 API `seurat_rtmp_platform_ca_bundle_pem()`. **macOS**: `SecTrustCopyAnchorCertificates` (검증: 156 CA / 235 KB). **Android**: cacerts 디렉터리 스캔. **iOS/Windows**: 네이티브 앵커 API 부재 → 사용자 번들 제공 또는 임베드 Mozilla CA (후속 작업). |
+| E.4 | 실서버 인증서 체인 E2E | P2 | ⏳ | YouTube / Twitch / 치지직 / SOOP 4종 RTMPS 엔드포인트 연결 + publish 성공. TLS 1.2 / 1.3 모두 재개. |
+| E.5 | iOS/Windows용 임베드 Mozilla CA 번들 (옵션) | P2 | ⏳ | `SEURAT_RTMP_EMBED_CA` CMake 옵션. curl.se `cacert.pem` vendored. `seurat_rtmp_platform_ca_bundle_pem()`이 iOS/Windows에서 임베드 번들을 대신 반환. ~200 KB 바이너리 증가. |
+
+**진입 순서**: E.1 → E.2 → E.3 → E.4. E.1+E.2+E.3 완료로 macOS/Android는 즉시 사용 가능. iOS 앱은 자체 번들 주입(E.5 전까지) 필요.
+
+### Phase F — RTMP 안정성 / 관찰성
+
+**목적**: 장시간 라이브 방송 중 서버 호환성 및 네트워크 이상 상황(Wi-Fi 전환, 기지국 핸드오버, 서버 재시작)에 대한 내성 강화.
+**근거**: 현재 구현은 RTMP 제어 메시지 응답과 재연결 로직이 없어 "OBS 대체"로 쓰기엔 부족. E2E 검증에서 드러날 가능성 높음.
+
+| # | 작업 | 우선순위 | 메모 |
+|---|---|---|---|
+| F.1 | Window Acknowledgement 응답 | P1 | RTMP spec §5.4.3 / §5.4.4. 서버가 보낸 `WindowAckSize`(type 5)를 보관 → 누적 송신 바이트가 윈도우 초과 시마다 `Acknowledgement`(type 3) 송신. 현재 `rtmp_chunk.cpp::handle_control()`에서 수신만 하고 무시 중. 관대한 서버(YouTube)에선 문제 없지만 SRS·엄격 릴레이에서 연결 끊김 가능. |
+| F.2 | User Control Message 응답 | P2 | `PingRequest`(event 6) → `PingResponse`(event 7) 송신. `StreamBegin/EOF/Dry/SetBufferLength` 수신 시 로깅. 주요 OTT는 publish 방향 ping을 안 보내지만 일부 릴레이 서버 호환성용. |
+| F.3 | 네트워크 품질 지표 | P2 | `seurat_rtmp_stats_t` 확장: `ack_lag_bytes`(송신-확인 차), `last_rtt_ms`(자체 ping 왕복), `send_buffer_depth`(TCP 백프레셔), `tls_version` / `negotiated_cipher`(RTMPS 진단). OBS의 "congestion" / "dropped frames" 급 관찰성. |
+| F.4 | 자동 재연결 유틸 | P2 | `seurat_rtmp_reconnect()` 공개 API + 지수 백오프 정책 필드(`retry_max_attempts`, `retry_base_ms`). 모바일 네트워크 전환 대응. 세션 상태(stream_key, 마지막 metadata, 마지막 seq headers)를 내부 보관 후 재사용 → 상위 앱이 일일이 재주입할 필요 없음. |
+| F.5 | Enhanced RTMP 준비 (HEVC) | P3 | `seurat-flv` 확장 video tag(IsExHeader + FourCC `hvc1`), `seurat-rtmp` `connect` 명령의 `fourCcList` 파라미터. `seurat-h265-native` 선행. 별도 Phase로 빼도 무방. |
 
 ---
 
@@ -206,5 +223,8 @@ void seurat_h264_destroy(seurat_h264_encoder_t* enc);
 - [ ] Phase 3 MPEG-TS — `seurat-mpegts` 통합 완료.
 - [ ] Phase 4 샘플 앱 3종(OSX/iOS/Android) 실기 송출 성공.
 - [x] Phase 5 H.264 네이티브 인코더 기본 경로 정식 채택 (OpenH264 기본값 OFF 전환 완료).
-- [ ] Phase E 인증서 검증 ON + 4개 메이저 플랫폼(YouTube/Twitch/치지직/SOOP) E2E 통과.
+- [x] Phase E.1~E.3 완료 — RTMPS 인증서 검증 기본 ON + 호스트명 검증 포함 (macOS/Android). iOS는 사용자 번들 주입 필요.
+- [ ] Phase E.4 — 4개 메이저 플랫폼(YouTube/Twitch/치지직/SOOP) RTMPS E2E 통과.
+- [ ] Phase E.5 — iOS/Windows용 임베드 Mozilla CA 번들 옵션.
+- [ ] Phase F.1 — Window Acknowledgement 응답 구현 (장시간 방송 안정성).
 - [ ] MSVC 빌드/패키징 성공 (단, 수요 확정 시점 이후).

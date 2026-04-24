@@ -48,7 +48,8 @@ extern "C" {
 #define SEURAT_RTMP_E_REJECTED          -6   /* server returned `onStatus` error   */
 #define SEURAT_RTMP_E_TIMEOUT           -7
 #define SEURAT_RTMP_E_UNSUPPORTED       -8   /* feature not yet implemented       */
-#define SEURAT_RTMP_E_TLS               -9   /* RTMPS requested but not built in  */
+#define SEURAT_RTMP_E_TLS               -9   /* TLS setup / handshake / verify failed
+                                                or RTMPS requested with CRYPTO=OFF */
 #define SEURAT_RTMP_E_URL               -10  /* cannot parse rtmp(s):// URL       */
 
 /* ------------------------------------------------------------- lifecycle -- */
@@ -81,6 +82,35 @@ typedef struct {
     /* Connect / send / recv timeouts in ms. 0 = implementation default. */
     uint32_t    connect_timeout_ms;
     uint32_t    io_timeout_ms;
+
+    /* ---------------- RTMPS / TLS (ignored for plain rtmp:// URLs) ---------- */
+
+    /* Optional in-memory PEM-encoded CA bundle used to verify the server
+     * certificate chain. One or more concatenated PEM certificates.
+     *
+     * NULL or empty  → fall back to OpenSSL's default verify paths
+     *                   (works on typical Linux/macOS dev boxes; generally
+     *                    empty on iOS/Android, which will cause verification
+     *                    to fail — plug in a platform bundle there).
+     *
+     * Non-NULL      → added to the CTX's trust store in addition to the
+     *                  OpenSSL default paths.
+     *
+     * Ignored when `tls_insecure` is non-zero. */
+    const char* ca_bundle_pem;
+
+    /* DANGEROUS. Development-only escape hatch.
+     *
+     *   0 (default) → peer certificate verification ON, hostname checked
+     *                  against SAN/CN via X509_VERIFY_PARAM_set1_host.
+     *   non-zero    → SSL_VERIFY_NONE, no hostname check. Accepts any cert,
+     *                  including self-signed or attacker-supplied. NEVER
+     *                  ship a release build with this set; it exposes the
+     *                  stream key to trivial MITM interception.
+     *
+     * Intended for early bring-up against test servers that use self-signed
+     * certs (e.g. local mediamtx with `tls: generate`). */
+    int         tls_insecure;
 } seurat_rtmp_config_t;
 
 seurat_rtmp_client_t* seurat_rtmp_create(const seurat_rtmp_config_t* cfg);
@@ -166,6 +196,38 @@ typedef struct {
 } seurat_rtmp_stats_t;
 
 int seurat_rtmp_get_stats(seurat_rtmp_client_t* c, seurat_rtmp_stats_t* out);
+
+/* ------------------------------------------------------- platform CA bundle -- */
+
+/* Returns a pointer to a process-lifetime PEM-encoded bundle of the
+ * platform's native CA trust anchors, suitable for assigning directly
+ * to `seurat_rtmp_config_t::ca_bundle_pem`.
+ *
+ * Extraction happens on first call (guarded by std::call_once), subsequent
+ * calls return the cached pointer. The buffer is owned by the library and
+ * MUST NOT be freed by the caller.
+ *
+ * Per-platform availability:
+ *   macOS         — SecTrustCopyAnchorCertificates → system roots.
+ *                    Expected to return ~170+ PEM blocks on a stock system.
+ *   Android       — /system/etc/security/cacerts/ (and APEX path on 14+).
+ *                    Directory scan; tolerates missing files / truncated
+ *                    entries by skipping them.
+ *   iOS           — SecTrustCopyAnchorCertificates returns only app-added
+ *                    anchors, not the system store. Typically NULL here.
+ *                    Callers should ship an explicit bundle (e.g. curl.se
+ *                    cacert.pem baked into the app's main bundle).
+ *   Windows       — Not yet implemented. Returns NULL.
+ *   Other         — Returns NULL.
+ *
+ * Returns NULL when extraction yields zero certificates. The client code
+ * should treat NULL as "no platform anchors available" and either fall
+ * back to an embedded / user-supplied bundle or refuse to connect.
+ *
+ * Safe to call when SEURAT_CRYPTO=OFF (always returns NULL — there is no
+ * TLS code path to feed the bundle into anyway).
+ */
+const char* seurat_rtmp_platform_ca_bundle_pem(void);
 
 #ifdef __cplusplus
 }  /* extern "C" */

@@ -42,19 +42,21 @@ constexpr const char* kDefaultFlashVer = "libseurat/0.2 (FMLE-compatible)";
 // -------- config copy helpers
 
 void copy_config(srt::Client* c, const seurat_rtmp_config_t* cfg) {
-    if (cfg->url)        c->cfg_url        = cfg->url;
-    if (cfg->stream_key) c->cfg_stream_key = cfg->stream_key;
-    if (cfg->flash_ver)  c->cfg_flash_ver  = cfg->flash_ver;
-    if (cfg->tc_url)     c->cfg_tc_url     = cfg->tc_url;
+    if (cfg->url)            c->cfg_url            = cfg->url;
+    if (cfg->stream_key)     c->cfg_stream_key     = cfg->stream_key;
+    if (cfg->flash_ver)      c->cfg_flash_ver      = cfg->flash_ver;
+    if (cfg->tc_url)         c->cfg_tc_url         = cfg->tc_url;
+    if (cfg->ca_bundle_pem)  c->cfg_ca_bundle_pem  = cfg->ca_bundle_pem;
 
     // Rewrite the public cfg's char* fields so they point into the stable
     // std::string storage; that way the user's original buffers can go out
     // of scope immediately after seurat_rtmp_create() returns.
     c->cfg = *cfg;
-    c->cfg.url        = c->cfg_url.empty()        ? nullptr : c->cfg_url.c_str();
-    c->cfg.stream_key = c->cfg_stream_key.empty() ? nullptr : c->cfg_stream_key.c_str();
-    c->cfg.flash_ver  = c->cfg_flash_ver.empty()  ? nullptr : c->cfg_flash_ver.c_str();
-    c->cfg.tc_url     = c->cfg_tc_url.empty()     ? nullptr : c->cfg_tc_url.c_str();
+    c->cfg.url            = c->cfg_url.empty()            ? nullptr : c->cfg_url.c_str();
+    c->cfg.stream_key     = c->cfg_stream_key.empty()     ? nullptr : c->cfg_stream_key.c_str();
+    c->cfg.flash_ver      = c->cfg_flash_ver.empty()      ? nullptr : c->cfg_flash_ver.c_str();
+    c->cfg.tc_url         = c->cfg_tc_url.empty()         ? nullptr : c->cfg_tc_url.c_str();
+    c->cfg.ca_bundle_pem  = c->cfg_ca_bundle_pem.empty()  ? nullptr : c->cfg_ca_bundle_pem.c_str();
 }
 
 }  // namespace
@@ -174,7 +176,10 @@ seurat_rtmp_client_t* seurat_rtmp_create(const seurat_rtmp_config_t* cfg) {
     // was requested, make_transport returns nullptr and we reject early —
     // the caller can't distinguish "alloc failed" from "TLS not built" at
     // the create boundary, so we surface a null client either way.
-    c->transport = srt::make_transport(c->parsed.tls);
+    srt::TlsOptions tls_opts;
+    tls_opts.ca_bundle_pem = c->cfg_ca_bundle_pem;
+    tls_opts.insecure      = (c->cfg.tls_insecure != 0);
+    c->transport = srt::make_transport(c->parsed.tls, tls_opts);
     if (!c->transport) {
         delete c;
         return nullptr;
@@ -202,7 +207,7 @@ const char* seurat_rtmp_strerror(int code) {
         case SEURAT_RTMP_E_REJECTED:      return "server rejected publish";
         case SEURAT_RTMP_E_TIMEOUT:       return "timed out";
         case SEURAT_RTMP_E_UNSUPPORTED:   return "feature not yet implemented";
-        case SEURAT_RTMP_E_TLS:           return "RTMPS requested but build has SEURAT_CRYPTO=OFF";
+        case SEURAT_RTMP_E_TLS:           return "TLS setup / handshake / certificate verification failed";
         case SEURAT_RTMP_E_URL:           return "malformed rtmp(s):// url";
         default:                          return "unknown error";
     }

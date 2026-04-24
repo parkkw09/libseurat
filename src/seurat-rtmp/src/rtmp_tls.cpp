@@ -17,14 +17,30 @@
 //   5. `close()` issues a best-effort SSL_shutdown, frees the SSL/CTX,
 //      then delegates the fd close to PosixTransport.
 //
-// Security note (Phase D baseline):
-//   Peer certificate verification is disabled by default in this first
-//   cut. OpenSSL's `SSL_CTX_set_default_verify_paths` does not find a
-//   usable CA store on iOS/Android without additional platform glue
-//   (Security framework / NDK-provided anchors), which would balloon the
-//   scope of this change. A future iteration will add a pluggable CA
-//   bundle + full hostname verification — see docs/DESIGN.md §8.6.1 and
-//   the "Phase E follow-up" roadmap entry.
+// Security model (Phase E):
+//   Peer certificate verification is ON by default. The trust store is
+//   populated from three sources in priority order:
+//
+//     1. User-provided in-memory PEM bundle (`TlsOptions::ca_bundle_pem`).
+//        Each PEM-encoded certificate is parsed and added to the CTX's
+//        X509_STORE. This is the recommended path for iOS/Android where
+//        OpenSSL's default paths resolve to nothing useful.
+//     2. OpenSSL's compiled-in default verify paths (useful on typical
+//        Linux / macOS dev hosts; empty on iOS/Android/Windows).
+//
+//   Hostname verification uses `X509_VERIFY_PARAM_set1_host` on the SSL
+//   object (not the CTX), which validates the SNI host against SAN/CN
+//   per RFC 6125. `X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS` is set so wildcard
+//   certs only match at the leftmost label.
+//
+//   An opt-in escape hatch `TlsOptions::insecure` downgrades back to
+//   SSL_VERIFY_NONE + no hostname check. Intended only for bring-up
+//   against self-signed test servers (e.g. local mediamtx). A release
+//   build should never ship with that set.
+//
+//   Phase E.3 will add platform-native CA bundle extraction helpers
+//   (iOS SecTrust / Android cacerts / Windows CertOpenStore) that produce
+//   a PEM blob the caller can feed into `ca_bundle_pem`.
 //
 // License: MIT.
 // =============================================================================
@@ -38,10 +54,13 @@
 #include <cstring>
 #include <new>
 #include <string>
+#include <utility>
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 namespace seurat::rtmp {
 
@@ -63,7 +82,7 @@ void ensure_openssl_inited() {
 
 class TlsTransport : public Transport {
 public:
-    TlsTransport() = default;
+    explicit TlsTransport(TlsOptions opts) : opts_(std::move(opts)) {}
     ~TlsTransport() override { close(); }
 
     int connect_host(const std::string& host, uint16_t port,
@@ -77,7 +96,7 @@ public:
         if (fd < 0) return SEURAT_RTMP_E_STATE;
 
         ctx_ = ::SSL_CTX_new(::TLS_client_method());
-        if (!ctx_) return fail();
+        if (!ctx_) return fail_tls();
 
         ::SSL_CTX_set_min_proto_version(ctx_, TLS1_2_VERSION);
         ::SSL_CTX_set_mode(ctx_,
@@ -85,17 +104,49 @@ public:
             SSL_MODE_ENABLE_PARTIAL_WRITE |
             SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
 
-        // Phase D: accept any peer cert. Phase E will plug in a CA bundle
-        // + hostname verification via X509_VERIFY_PARAM_set1_host.
-        ::SSL_CTX_set_verify(ctx_, SSL_VERIFY_NONE, nullptr);
+        // -------- trust store + verify mode
+        if (opts_.insecure) {
+            // Opt-in development mode. Accepts any cert, skips hostname
+            // check. Keep this path behaviourally identical to the Phase
+            // D baseline so legacy tests against self-signed servers
+            // continue to work.
+            ::SSL_CTX_set_verify(ctx_, SSL_VERIFY_NONE, nullptr);
+        } else {
+            // Default: verify on. Caller must have supplied CA anchors
+            // somewhere — user-provided PEM wins, OpenSSL's default paths
+            // act as a best-effort fallback (empty on iOS/Android).
+            if (!opts_.ca_bundle_pem.empty()) {
+                const int added = load_ca_bundle_pem(ctx_, opts_.ca_bundle_pem);
+                if (added <= 0) return fail_tls();
+            }
+            // Default paths are additive, not exclusive of the PEM above.
+            // On iOS/Android this is a no-op; on macOS/Linux it may pick
+            // up a Homebrew / distro CA store.
+            ::SSL_CTX_set_default_verify_paths(ctx_);
+            ::SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER, nullptr);
+        }
 
         ssl_ = ::SSL_new(ctx_);
-        if (!ssl_) return fail();
+        if (!ssl_) return fail_tls();
+
+        // Hostname verification (MITM defense). Must be set on the SSL
+        // object, not the CTX, because `host` is per-connection. OpenSSL
+        // enforces this during SSL_connect — handshake fails if the leaf
+        // cert's SAN / CN doesn't match.
+        if (!opts_.insecure) {
+            ::X509_VERIFY_PARAM* param = ::SSL_get0_param(ssl_);
+            ::X509_VERIFY_PARAM_set_hostflags(
+                param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+            if (::X509_VERIFY_PARAM_set1_host(param, host.c_str(),
+                                                host.size()) != 1) {
+                return fail_tls();
+            }
+        }
 
         // BIO_NOCLOSE: OpenSSL must NOT call ::close(fd) on SSL_free; the
         // fd is owned by our inner PosixTransport which does the teardown.
         ::BIO* bio = ::BIO_new_socket(fd, BIO_NOCLOSE);
-        if (!bio) return fail();
+        if (!bio) return fail_tls();
         ::SSL_set_bio(ssl_, bio, bio);
 
         // SNI is mandatory for all public RTMPS endpoints we target (they
@@ -103,7 +154,7 @@ public:
         // server terminates with `unrecognized_name` during handshake.
         ::SSL_set_tlsext_host_name(ssl_, host.c_str());
 
-        if (::SSL_connect(ssl_) != 1) return fail();
+        if (::SSL_connect(ssl_) != 1) return fail_tls();
         return SEURAT_RTMP_OK;
     }
 
@@ -186,15 +237,45 @@ private:
         }
     }
 
-    // Drain the OpenSSL error queue so subsequent ERR_* observers don't
-    // trip over stale entries from a failed connect, then tear everything
-    // down and return a network-error code to the caller.
-    int fail() {
+    // Parse one or more concatenated PEM certificates from `pem` and
+    // push them into the CTX's trust store. Returns the number of certs
+    // successfully added (>0 on success), -1 on hard allocation error.
+    // Malformed entries are skipped silently — callers expecting strict
+    // validation should audit the `added > 0` return before SSL_connect.
+    static int load_ca_bundle_pem(::SSL_CTX* ctx, const std::string& pem) {
+        ::BIO* bio = ::BIO_new_mem_buf(pem.data(),
+                                         static_cast<int>(pem.size()));
+        if (!bio) return -1;
+
+        ::X509_STORE* store = ::SSL_CTX_get_cert_store(ctx);
+        if (!store) { ::BIO_free(bio); return -1; }
+
+        int added = 0;
+        while (true) {
+            ::X509* cert =
+                ::PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+            if (!cert) break;
+            if (::X509_STORE_add_cert(store, cert) == 1) ++added;
+            ::X509_free(cert);
+        }
+        // Drain any "no start line" EOF errors left in the queue by
+        // PEM_read_bio_X509 so they don't confuse subsequent diagnostics.
         while (::ERR_get_error() != 0) {}
-        close();
-        return SEURAT_RTMP_E_NETWORK;
+        ::BIO_free(bio);
+        return added;
     }
 
+    // Drain the OpenSSL error queue so subsequent ERR_* observers don't
+    // trip over stale entries from a failed connect, then tear everything
+    // down and surface a TLS-specific error code to the caller. Used for
+    // all setup + handshake + verification failures.
+    int fail_tls() {
+        while (::ERR_get_error() != 0) {}
+        close();
+        return SEURAT_RTMP_E_TLS;
+    }
+
+    TlsOptions     opts_;
     PosixTransport posix_;
     ::SSL_CTX*     ctx_ = nullptr;
     ::SSL*         ssl_ = nullptr;
@@ -202,8 +283,8 @@ private:
 
 }  // namespace
 
-Transport* make_tls_transport() {
-    return new (std::nothrow) TlsTransport();
+Transport* make_tls_transport(const TlsOptions& tls_opts) {
+    return new (std::nothrow) TlsTransport(tls_opts);
 }
 
 }  // namespace seurat::rtmp

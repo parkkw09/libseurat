@@ -174,8 +174,12 @@ if(APPLE)
         target_link_libraries(seurat PRIVATE "-Wl,-force_load,${_archive}")
     endforeach()
     
-    # Frameworks required by native components
-    target_link_libraries(seurat PRIVATE "-framework VideoToolbox" "-framework AudioToolbox" "-framework CoreFoundation" "-framework CoreVideo" "-framework CoreMedia")
+    # Frameworks required by native components.
+    #   Security  — seurat-rtmp CA bundle extractor (SecTrustCopyAnchorCertificates).
+    target_link_libraries(seurat PRIVATE
+        "-framework VideoToolbox" "-framework AudioToolbox"
+        "-framework CoreFoundation" "-framework CoreVideo" "-framework CoreMedia"
+        "-framework Security")
 elseif(ANDROID OR (CMAKE_SYSTEM_NAME STREQUAL "Linux"))
     target_link_libraries(seurat PRIVATE "-Wl,--whole-archive")
     foreach(_target ${SEURAT_INTERNAL_TARGETS})

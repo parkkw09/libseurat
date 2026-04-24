@@ -45,6 +45,14 @@ int parse_url(const char* url, ParsedUrl* out);
 // The transport type is chosen at client-create time based on the URL
 // scheme (`rtmp://` vs `rtmps://`); see `make_transport()` below.
 
+// TLS knobs passed through to TlsTransport at construction time. Mirrors
+// the relevant subset of seurat_rtmp_config_t, but uses std::string so the
+// owning Client's lifetime dictates the backing storage.
+struct TlsOptions {
+    std::string ca_bundle_pem;   // empty → default OpenSSL paths only
+    bool        insecure = false;  // true → SSL_VERIFY_NONE, no host check
+};
+
 class Transport {
 public:
     virtual ~Transport() = default;
@@ -84,15 +92,16 @@ private:
 };
 
 // Returns a new heap-allocated transport. When `use_tls` is true and the
-// build has SEURAT_RTMP_WITH_TLS=1, yields a TlsTransport; otherwise a
-// PosixTransport. Returns nullptr if TLS was requested but the build was
-// compiled without OpenSSL support (caller should surface E_TLS).
-Transport* make_transport(bool use_tls);
+// build has SEURAT_RTMP_WITH_TLS=1, yields a TlsTransport configured with
+// `tls_opts`; otherwise a PosixTransport (and `tls_opts` is ignored).
+// Returns nullptr if TLS was requested but the build was compiled without
+// OpenSSL support (caller should surface E_TLS).
+Transport* make_transport(bool use_tls, const TlsOptions& tls_opts);
 
 #if defined(SEURAT_RTMP_WITH_TLS) && SEURAT_RTMP_WITH_TLS
 // Implemented in rtmp_tls.cpp. Kept separate so plain-RTMP builds (without
 // OpenSSL) never pull in TLS code paths.
-Transport* make_tls_transport();
+Transport* make_tls_transport(const TlsOptions& tls_opts);
 #endif
 
 // ---- RTMP handshake (Phase B).
@@ -236,6 +245,7 @@ struct Client {
     std::string cfg_stream_key;
     std::string cfg_flash_ver;
     std::string cfg_tc_url;
+    std::string cfg_ca_bundle_pem;  // RTMPS CA trust anchors, opaque PEM blob
 
     ParsedUrl   parsed;
     Transport*  transport = nullptr;
